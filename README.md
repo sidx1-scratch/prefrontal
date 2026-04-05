@@ -82,3 +82,4 @@ You need at least one local AI runtime running for the chatbot to work.
 ---
 
 *Prefrontal by sidx1 · Built with ️antigravity using Local AI*
+Oh yeah contributions are open fork it or improve it just remember: "local ai is the best ai"

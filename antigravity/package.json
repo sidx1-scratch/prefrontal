@@ -1,0 +1,12 @@
+{
+  "name": "antigravity",
+  "version": "1.0.0",
+  "description": "Prefrontal — Local AI Chatbot",
+  "main": "app.js",
+  "scripts": {
+    "start": "npx -y serve ."
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT"
+}

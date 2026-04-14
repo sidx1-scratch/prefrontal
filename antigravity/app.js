@@ -23,10 +23,78 @@ const state = {
     sound:        false,
     sendMode:     'enter',  // 'enter' | 'shift'
     theme:        'dark',
+    apiKey:       '',
+    personality:  'balanced', // tracks which preset is active
   },
   totalTokens: 0,
   profile: null,  // { deviceId, displayName, avatar, createdAt }
 };
+
+// ── PERSONALITY PRESETS ───────────────────────────────────────────
+const PERSONALITY_PRESETS = {
+  balanced: {
+    name: 'Balanced',
+    temperature: 0.7,
+    systemPrompt: 'You are Prefrontal, a helpful, honest, and harmless AI assistant. You are running entirely locally on the user\'s device with complete privacy. Be concise, clear, and friendly. Format code in fenced code blocks with the language specified.',
+  },
+  creative: {
+    name: 'Creative',
+    temperature: 1.1,
+    systemPrompt: 'You are Prefrontal, a creative and imaginative AI muse running entirely locally on the user\'s device. Be expressive, playful, and explore ideas with flair. Use vivid language, analogies, and original thinking. Don\'t be afraid to be surprising or unconventional. Format code in fenced code blocks.',
+  },
+  precise: {
+    name: 'Precise',
+    temperature: 0.2,
+    systemPrompt: 'You are Prefrontal, a precise and factual AI assistant running entirely locally. Be concise, direct, and accurate. Avoid filler, preamble, and unnecessary repetition. Answer exactly what is asked, nothing more. Use bullet points and numbered lists where appropriate. Format code in fenced code blocks.',
+  },
+  developer: {
+    name: 'Developer',
+    temperature: 0.3,
+    systemPrompt: 'You are Prefrontal, a senior software engineer and code review AI running entirely locally. Prioritize working, idiomatic code above all else. Be terse and technical — skip hand-holding and pleasantries. Always specify the language in fenced code blocks. Point out potential bugs, edge cases, and performance issues.',
+  },
+  custom: {
+    name: 'Custom',
+    temperature: null,
+    systemPrompt: null,
+  },
+};
+
+function applyPersonalityPreset(preset, { updateUI = false } = {}) {
+  const p = PERSONALITY_PRESETS[preset];
+  if (!p || preset === 'custom') return;
+  state.settings.personality   = preset;
+  state.settings.temperature   = p.temperature;
+  state.settings.systemPrompt  = p.systemPrompt;
+  if (updateUI) {
+    if (els.tempSlider)   { els.tempSlider.value = p.temperature; }
+    if (els.tempDisplay)  { els.tempDisplay.textContent = p.temperature.toFixed(2); }
+    if (els.tempBadge)    { els.tempBadge.textContent = getTempBadgeLabel(p.temperature); }
+    if (els.systemPrompt) { els.systemPrompt.value = p.systemPrompt; }
+    syncPersonalityUI(preset);
+  }
+  saveSettings();
+}
+
+function syncPersonalityUI(preset) {
+  // Settings modal preset buttons
+  document.querySelectorAll('.personality-preset-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.preset === preset)
+  );
+  // Welcome screen pills
+  document.querySelectorAll('.personality-pill').forEach(b =>
+    b.classList.toggle('active', b.dataset.preset === preset)
+  );
+}
+
+function getTempBadgeLabel(val) {
+  const v = parseFloat(val);
+  if (v <= 0.1) return 'Deterministic';
+  if (v <= 0.4) return 'Precise';
+  if (v <= 0.8) return 'Balanced';
+  if (v <= 1.2) return 'Creative';
+  if (v <= 1.6) return 'Expressive';
+  return 'Wild';
+}
 
 // ── DOM REFS ──────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
@@ -58,6 +126,8 @@ const els = {
   closeSettings:    $('closeSettings'),
   serverUrl:        $('serverUrl'),
   serverUrlHint:    $('serverUrlHint'),
+  serverTypeBadge:  $('serverTypeBadge'),
+  serverQuickBtns:  $('serverQuickBtns'),
   runtimeOptions:   $('runtimeOptions'),
   modelInput:       $('modelInput'),
   fetchModelsBtn:   $('fetchModelsBtn'),
@@ -65,6 +135,7 @@ const els = {
   systemPrompt:     $('systemPrompt'),
   tempSlider:       $('tempSlider'),
   tempDisplay:      $('tempDisplay'),
+  tempBadge:        $('tempBadge'),
   ctxSlider:        $('ctxSlider'),
   ctxDisplay:       $('ctxDisplay'),
   themeOptions:     $('themeOptions'),
@@ -72,6 +143,7 @@ const els = {
   autoScrollToggle: $('autoScrollToggle'),
   soundToggle:      $('soundToggle'),
   shortcutOptions:  $('shortcutOptions'),
+  apiKey:           $('apiKey'),
   resetSettingsBtn: $('resetSettingsBtn'),
   saveSettingsBtn:  $('saveSettingsBtn'),
   confirmOverlay:   $('confirmOverlay'),
@@ -540,9 +612,14 @@ async function sendRequest() {
       };
     }
 
+    const headers = { 'Content-Type': 'application/json' };
+    if (state.settings.apiKey && state.settings.runtime === 'openai') {
+      headers['Authorization'] = `Bearer ${state.settings.apiKey}`;
+    }
+
     const response = await fetch(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: headers,
       body: JSON.stringify(payload),
       signal: state.abortController.signal,
     });
@@ -707,7 +784,11 @@ async function checkServer() {
     } else {
       url = `${state.settings.serverUrl.replace(/\/$/, '')}/api/tags`;
     }
-    const r = await fetch(url, { signal: AbortSignal.timeout(4000) });
+    const headers = {};
+    if (state.settings.apiKey && state.settings.runtime === 'openai') {
+      headers['Authorization'] = `Bearer ${state.settings.apiKey}`;
+    }
+    const r = await fetch(url, { signal: AbortSignal.timeout(4000), headers });
     if (r.ok) {
       const data = await r.json();
       let models = [];
@@ -802,12 +883,14 @@ function openSettings() {
   els.modelInput.value   = state.settings.model;
   els.systemPrompt.value = state.settings.systemPrompt;
   els.tempSlider.value   = state.settings.temperature;
-  els.tempDisplay.textContent = state.settings.temperature;
+  els.tempDisplay.textContent = parseFloat(state.settings.temperature).toFixed(2);
+  if (els.tempBadge) els.tempBadge.textContent = getTempBadgeLabel(state.settings.temperature);
   els.ctxSlider.value    = state.settings.numCtx;
   els.ctxDisplay.textContent = Number(state.settings.numCtx).toLocaleString();
   els.streamToggle.checked     = state.settings.stream;
   els.autoScrollToggle.checked = state.settings.autoScroll;
   els.soundToggle.checked      = state.settings.sound;
+  if (els.apiKey) els.apiKey.value = state.settings.apiKey || '';
 
   document.querySelectorAll('.theme-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.theme === state.settings.theme);
@@ -826,27 +909,84 @@ function openSettings() {
     updateServerUrlHint(state.settings.runtime);
   }
 
+  // Sync personality presets
+  syncPersonalityUI(state.settings.personality || 'balanced');
+
   els.settingsOverlay.classList.add('open');
   fetchAndShowModels();
 }
 
+function getServerType(url) {
+  if (!url) return 'local';
+  const u = url.toLowerCase();
+  if (u.includes('localhost') || u.includes('127.0.0.1') || u.includes('::1')) return 'local';
+  // RFC 1918 private ranges
+  if (/^https?:\/\/(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/.test(u)) return 'lan';
+  return 'external';
+}
+
+function updateServerBadge(url) {
+  if (!els.serverTypeBadge) return;
+  const type = getServerType(url);
+  const labels = { local: '🏠 local', lan: '📡 lan', external: '🌐 external' };
+  els.serverTypeBadge.textContent = labels[type] || 'local';
+}
+
 function updateServerUrlHint(runtime) {
-  if (runtime === 'openai') {
-    els.serverUrlHint.textContent = 'The Base URL for local API (e.g. http://localhost:8080 or http://localhost:8080/v1 for llama.cpp).';
-  } else {
-    els.serverUrlHint.textContent = 'The Base URL where Ollama is running locally (e.g. http://localhost:11434).';
-  }
+  // The hint is now static HTML with CORS info — only update if runtime changes the default URL
+  updateServerBadge(els.serverUrl?.value || '');
+}
+
+// Wire up server quick select buttons
+function bindServerQuickBtns() {
+  if (!els.serverQuickBtns) return;
+  els.serverQuickBtns.addEventListener('click', e => {
+    const btn = e.target.closest('.server-quick-btn');
+    if (!btn) return;
+    const url  = btn.dataset.url;
+    const runtime = btn.dataset.runtime;
+
+    if (url) {
+      els.serverUrl.value = url;
+      updateServerBadge(url);
+      els.serverUrl.focus();
+
+      // If it's a template URL, select the placeholder part so they can type over it
+      if (url.includes('192.168.1.X')) els.serverUrl.setSelectionRange(7, 18);
+      if (url.includes('myserver.example.com')) els.serverUrl.setSelectionRange(8, 28);
+    }
+
+    // Auto-switch runtime if specified
+    if (runtime && els.runtimeOptions) {
+      els.runtimeOptions.querySelectorAll('.shortcut-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.runtime === runtime);
+      });
+      updateServerUrlHint(runtime);
+    } else if (url && url.includes('/v1')) {
+      // Auto-detect openai API schema
+      els.runtimeOptions.querySelectorAll('.shortcut-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.runtime === 'openai');
+      });
+      updateServerUrlHint('openai');
+    }
+  });
+
+  // Live badge update as user types
+  els.serverUrl?.addEventListener('input', e => updateServerBadge(e.target.value));
 }
 
 function saveSettingsFromModal() {
   state.settings.serverUrl    = els.serverUrl.value.trim() || 'http://localhost:11434';
   state.settings.model        = els.modelInput.value.trim() || 'gemma4:e2b';
   state.settings.systemPrompt = els.systemPrompt.value;
-  state.settings.temperature  = parseFloat(els.tempSlider.value);
+  // Parse temperature explicitly as a float and clamp to [0,2]
+  const rawTemp = parseFloat(els.tempSlider.value);
+  state.settings.temperature  = isNaN(rawTemp) ? 0.7 : Math.min(2, Math.max(0, rawTemp));
   state.settings.numCtx       = parseInt(els.ctxSlider.value);
   state.settings.stream       = els.streamToggle.checked;
   state.settings.autoScroll   = els.autoScrollToggle.checked;
   state.settings.sound        = els.soundToggle.checked;
+  if (els.apiKey) state.settings.apiKey = els.apiKey.value.trim();
 
   const activeTheme = document.querySelector('.theme-btn.active')?.dataset.theme || 'dark';
   state.settings.theme = activeTheme;
@@ -860,10 +1000,16 @@ function saveSettingsFromModal() {
     state.settings.runtime = activeRuntime;
   }
 
+  // Detect if current prompt matches any preset
+  const matchedPreset = Object.entries(PERSONALITY_PRESETS).find(
+    ([key, p]) => key !== 'custom' && p.systemPrompt === state.settings.systemPrompt
+  );
+  state.settings.personality = matchedPreset ? matchedPreset[0] : 'custom';
+
   els.modelNameDisplay.textContent = state.settings.model;
   saveSettings();
   checkServer();
-  toast('Settings saved ✓', 'success');
+  toast(`Settings saved ✓  (temp: ${state.settings.temperature.toFixed(2)})`, 'success');
   els.settingsOverlay.classList.remove('open');
 }
 
@@ -896,6 +1042,8 @@ function autoResizeInput() {
 
 // ── EVENT BINDINGS ────────────────────────────────────────────────
 function bindEvents() {
+  bindServerQuickBtns();
+
   // Sidebar toggle
   els.sidebarToggle.addEventListener('click', () => {
     els.sidebar.classList.toggle('collapsed');
@@ -974,14 +1122,47 @@ function bindEvents() {
     }
   });
 
-  // Temp slider
+  // Temp slider — live label update
   els.tempSlider.addEventListener('input', e => {
-    els.tempDisplay.textContent = parseFloat(e.target.value).toFixed(2);
+    const val = parseFloat(e.target.value);
+    els.tempDisplay.textContent = val.toFixed(2);
+    if (els.tempBadge) els.tempBadge.textContent = getTempBadgeLabel(val);
+    // Any manual drag = custom (deselect presets visually but keep current personality)
   });
   // Context slider
   els.ctxSlider.addEventListener('input', e => {
     els.ctxDisplay.textContent = Number(e.target.value).toLocaleString();
   });
+
+  // Personality presets in settings modal
+  document.addEventListener('click', e => {
+    const btn = e.target.closest('#personalityPresets .personality-preset-btn');
+    if (!btn) return;
+    applyPersonalityPreset(btn.dataset.preset, { updateUI: true });
+  });
+
+  // System prompt manual edit → mark as custom
+  els.systemPrompt.addEventListener('input', () => {
+    const matches = Object.entries(PERSONALITY_PRESETS).some(
+      ([key, p]) => key !== 'custom' && p.systemPrompt === els.systemPrompt.value
+    );
+    if (!matches) {
+      state.settings.personality = 'custom';
+      syncPersonalityUI('custom');
+    }
+  });
+
+  // Welcome screen personality pills
+  const welcomeBar = $('welcomePersonalityBar');
+  if (welcomeBar) {
+    welcomeBar.addEventListener('click', e => {
+      const pill = e.target.closest('.personality-pill');
+      if (!pill) return;
+      applyPersonalityPreset(pill.dataset.preset, { updateUI: false });
+      syncPersonalityUI(pill.dataset.preset);
+      toast(`${PERSONALITY_PRESETS[pill.dataset.preset].name} mode activated`, 'success', 2000);
+    });
+  }
 
   // Input events
   els.userInput.addEventListener('input', autoResizeInput);
@@ -1059,6 +1240,9 @@ function init() {
   renderChat();
   bindEvents();
   checkServer();
+
+  // Sync personality UI to saved preference
+  syncPersonalityUI(state.settings.personality || 'balanced');
 
   // Focus input
   setTimeout(() => els.userInput.focus(), 100);

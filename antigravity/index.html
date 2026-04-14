@@ -3,15 +3,29 @@
 
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Prefrontal — Powered by AI</title>
   <meta name="description"
     content="A local AI chatbot powered by AI running entirely on your device with complete privacy. Private, offline, no ads." />
+  <!-- iOS / PWA -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="theme-color" content="#212121" />
+  <!-- Prevent iOS double-tap-zoom on buttons -->
+  <meta name="format-detection" content="telephone=no" />
   <link rel="stylesheet" href="vendor/highlight-dark.min.css" id="hlTheme" />
   <link rel="stylesheet" href="style.css" />
 </head>
 
 <body>
+
+  <!-- Ambient Background for Glassmorphism -->
+  <div class="ambient-bg">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
 
   <!-- ── SIDEBAR ── -->
   <aside class="sidebar" id="sidebar">
@@ -137,20 +151,19 @@
         </div>
         <h1 class="welcome-title">How can I help you today?</h1>
         <p class="welcome-subtitle">Powered by <strong>AI</strong> · Runs locally · No ads · 100% private</p>
+        <div class="welcome-personality-bar" id="welcomePersonalityBar">
+          <button class="personality-pill active" data-preset="balanced">⚖️ Balanced</button>
+          <button class="personality-pill" data-preset="creative">🎨 Creative</button>
+          <button class="personality-pill" data-preset="precise">🎯 Precise</button>
+          <button class="personality-pill" data-preset="developer">💻 Developer</button>
+        </div>
         <div class="welcome-chips">
-          <button class="chip" data-prompt="Explain quantum computing in simple terms">⚛️ Explain quantum computing in
-            simple terms</button>
-          <button class="chip" data-prompt="Write a Python function to sort a list of dictionaries by a key">🐍 Write a
-            Python function to sort a list</button>
-          <button class="chip" data-prompt="What are the best practices for REST API design?">🌐 What are REST API best
-            practices?</button>
-          <button class="chip" data-prompt="Write a short creative story about a robot discovering music">🤖 Write a
-            short story about a robot</button>
-          <button class="chip" data-prompt="What are 5 productivity habits backed by science?">🧠 5 science-backed
-            productivity habits</button>
-          <button class="chip"
-            data-prompt="Translate 'Hello, how are you today?' into French, Spanish, German, and Japanese">🌍 Translate
-            a phrase into 4 languages</button>
+          <button class="chip" data-prompt="Explain quantum computing using a simple analogy">⚛️ Explain quantum computing simply</button>
+          <button class="chip" data-prompt="Write a Python function to sort a list of dictionaries by a key">🐍 Sort a list of dicts in Python</button>
+          <button class="chip" data-prompt="What are the best practices for REST API design?">🌐 REST API best practices</button>
+          <button class="chip" data-prompt="Write a short creative story about a robot discovering music">🤖 Story: robot discovers music</button>
+          <button class="chip" data-prompt="What are 5 productivity habits backed by science?">🧠 5 science-backed productivity habits</button>
+          <button class="chip" data-prompt="Debug this code: for i in rang(10): print(i)">🐛 Debug this Python code</button>
         </div>
       </div>
 
@@ -221,9 +234,27 @@
         </div>
 
         <div class="setting-group">
-          <label class="setting-label">Server URL</label>
-          <input type="text" class="setting-input" id="serverUrl" value="http://localhost:11434" />
-          <p class="setting-hint" id="serverUrlHint">The Base URL where Ollama is running locally.</p>
+          <label class="setting-label">Server URL
+            <span class="server-type-badge" id="serverTypeBadge">local</span>
+          </label>
+          <input type="text" class="setting-input" id="serverUrl" value="http://localhost:11434"
+            placeholder="http://localhost:11434" />
+          <div class="server-quick-btns" id="serverQuickBtns">
+            <button class="server-quick-btn" data-url="http://localhost:11434" data-runtime="ollama">🏠 Local Ollama</button>
+            <button class="server-quick-btn" data-url="http://localhost:8080/v1" data-runtime="openai">🏠 Local Llama.cpp</button>
+            <button class="server-quick-btn" data-url="http://192.168.1.X:11434" data-type="lan">📡 LAN Ollama</button>
+            <button class="server-quick-btn" data-url="https://myserver.example.com" data-type="external">🌐 Custom Remote Host</button>
+          </div>
+          <p class="setting-hint" id="serverUrlHint">
+            Enter any server URL — local, LAN (e.g. <code>http://192.168.1.50:11434</code>), or a remote server.
+            For external servers, ensure CORS is enabled: <code>OLLAMA_ORIGINS=*</code>.
+          </p>
+        </div>
+
+        <div class="setting-group">
+          <label class="setting-label">API Key <span style="font-size:10.5px;font-weight:normal;color:var(--text-muted)">(Optional)</span></label>
+          <input type="password" class="setting-input" id="apiKey" autocomplete="off" placeholder="sk-..." />
+          <p class="setting-hint">Required for commercial OpenAI-compatible providers (OpenAI, Groq, Anthropic etc). Stored locally.</p>
         </div>
 
         <div class="setting-group">
@@ -237,17 +268,52 @@
         </div>
 
         <div class="setting-group">
+          <label class="setting-label">Personality Preset</label>
+          <div class="personality-preset-grid" id="personalityPresets">
+            <button class="personality-preset-btn" data-preset="balanced" title="Helpful, clear, and to the point">
+              <span class="preset-icon">⚖️</span>
+              <span class="preset-name">Balanced</span>
+              <span class="preset-desc">Default helpful assistant</span>
+            </button>
+            <button class="personality-preset-btn" data-preset="creative" title="Imaginative, expressive, and explorative">
+              <span class="preset-icon">🎨</span>
+              <span class="preset-name">Creative</span>
+              <span class="preset-desc">Imaginative &amp; expressive</span>
+            </button>
+            <button class="personality-preset-btn" data-preset="precise" title="Concise, factual, no filler">
+              <span class="preset-icon">🎯</span>
+              <span class="preset-name">Precise</span>
+              <span class="preset-desc">Concise &amp; factual</span>
+            </button>
+            <button class="personality-preset-btn" data-preset="developer" title="Code-first, technical, no hand-holding">
+              <span class="preset-icon">💻</span>
+              <span class="preset-name">Developer</span>
+              <span class="preset-desc">Code-first, technical</span>
+            </button>
+          </div>
+          <p class="setting-hint">Quickly switch the AI's personality. Selecting a preset updates the System Prompt and Temperature below.</p>
+        </div>
+
+        <div class="setting-group">
           <label class="setting-label">System Prompt</label>
           <textarea class="setting-input setting-textarea" id="systemPrompt"
             placeholder="You are a helpful AI assistant…"
             rows="4">You are Prefrontal, a helpful, honest, and harmless AI assistant. You are running entirely locally on the user's device with complete privacy. Be concise, clear, and friendly. Format code in fenced code blocks with the language specified.</textarea>
-          <p class="setting-hint">Defines the assistant's personality and behaviour.</p>
+          <p class="setting-hint">Defines the assistant's personality and behaviour. Editing this manually will deselect any preset.</p>
         </div>
 
         <div class="setting-group">
-          <label class="setting-label">Temperature — <span id="tempDisplay">0.7</span></label>
+          <label class="setting-label">Temperature
+            <span class="temp-badge" id="tempBadge">Balanced</span>
+            — <span id="tempDisplay">0.7</span>
+          </label>
           <input type="range" class="setting-slider" id="tempSlider" min="0" max="2" step="0.05" value="0.7" />
-          <p class="setting-hint">Higher = more creative. Lower = more focused. (0 – 2)</p>
+          <div class="temp-labels">
+            <span>🧊 0 · Deterministic</span>
+            <span>⚖️ 0.7 · Balanced</span>
+            <span>🔥 2 · Wild</span>
+          </div>
+          <p class="setting-hint">Controls randomness. Lower = focused &amp; deterministic. Higher = creative &amp; unpredictable. <strong>This is sent live with every message.</strong></p>
         </div>
 
         <div class="setting-group">

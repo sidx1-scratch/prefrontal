@@ -22,6 +22,9 @@ npm start
 ```
 > A local web server starts and the app opens in your browser automatically at `http://localhost:3000`.
 
+**External or LAN Servers:**
+If you run the AI backend on a different computer (e.g., a home server or a PC on your local network), ensure your server is bound to `0.0.0.0` (as shown below) and simply enter its LAN IP address in the Settings (e.g., `http://192.168.1.100:11434` for Ollama or `http://192.168.1.100:8080/v1` for Llama.cpp).
+
 ---
 
 ## 🧠 Setting Up Your AI Backend
@@ -173,13 +176,15 @@ Temperature controls how random/creative the AI's outputs are:
 | 🔄 **Streaming** | Real-time token-by-token generation |
 | 🎭 **Personality Presets** | 4 built-in modes with one click |
 | 🌡️ **Temperature Control** | Live sent with every request |
-| 📚 **Multi-Backend** | Ollama and Llama.cpp (OpenAI-compatible API) |
+| 📚 **Multi-Backend** | Ollama and Llama.cpp (OpenAI-compatible API) over Local or LAN |
+| 🌐 **LAN & External** | Connect to dedicated AI servers on your local network |
 | 💾 **Multi-Chat** | Unlimited saved local conversations |
 | 🔍 **Search** | Instant conversation search |
-| 🌙 **4 Themes** | Dark, Midnight, Emerald, Light |
+| 📱 **PWA & Mobile Ready** | Install as an app on iOS/Android; includes safe-area handling |
+| 🎨 **Refined UI** | Premium responsive aesthetics across 4 themes (Dark, Midnight, Emerald, Light) |
 | 🧑 **Local Profile** | Device identity stored locally (no accounts) |
 | 📤 **Export** | Export chats as Markdown, profile as JSON |
-| 🔒 **100% Private** | Zero network calls except to your local server |
+| 🔒 **100% Private** | Zero network calls except to your specified models |
 
 ---
 

@@ -259,4 +259,4 @@ prefrontal/
 
 ---
 
-*Prefrontal by **sidx1** · Built with ⚡ antigravity using Local AI · [github.com/sidx1](https://github.com/sidx1)*
+*Prefrontal by **sidx1-scratch** · Built with ⚡ antigravity using Local AI · [github.com/sidx1-scratch](https://github.com/sidx1-scratch)*

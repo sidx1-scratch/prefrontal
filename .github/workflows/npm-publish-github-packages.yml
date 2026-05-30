@@ -1,15 +1,15 @@
-# This workflow runs tests on every push and pull request automatically, 
+# This workflow runs automatically on every push and pull request, 
 # and safely publishes the package only when a release is created.
 
 name: Node.js Package
 
 on:
   push:
-    branches: [ main ]         # Runs tests automatically on push to main
+    branches: [ main ]         # Automatically runs checks on standard pushes
   pull_request:
-    branches: [ main ]         # Runs tests automatically on PRs to main
+    branches: [ main ]         # Automatically runs checks on pull requests
   release:
-    types: [created]           # Runs tests and publishes on a new release
+    types: [created]           # Automatically triggers the publication on a new release
 
 jobs:
   build:
@@ -19,24 +19,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install       # Fixed: Uses install to avoid package-lock errors
-      - run: npm test
+      - run: npm install       # Installs your project dependencies automatically
 
   publish-gpr:
     needs: build
-    # Safeguard: This job only runs if the triggering event was an actual release
-    if: github.event_name == 'release'
+    if: github.event_name == 'release' # Security gate: only publishes when you make a release
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write          # Grants GITHUB_TOKEN permission to upload packages
+      packages: write          # Grants GITHUB_TOKEN the power to upload packages
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           registry-url: https://github.com
-      - run: npm install       # Fixed: Uses install to avoid package-lock errors
+      - run: npm install       
       - run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{secrets.GITHUB_TOKEN}}

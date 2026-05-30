@@ -1,4 +1,5 @@
 # 🧠 Prefrontal — Local AI Chatbot
+
 ### 100% Offline · No Ads · No API Keys · Your Data Stays on Your Device
 
 Prefrontal is an open-source, privacy-first chat interface for local AI models. It works with **Ollama** (desktop) and **Llama.cpp** (any platform including Android via Termux). No cloud, no telemetry, no subscriptions.
@@ -8,13 +9,35 @@ Prefrontal is an open-source, privacy-first chat interface for local AI models. 
 ## ⚡ Quick Start
 
 ### Prerequisites
-- **Node.js** (v18+) — download at [nodejs.org](https://nodejs.org/)
+- **Node.js** (v18+) — download at [nodejs.org](https://nodejs.org)
 - A running local AI backend (Ollama or Llama.cpp — see below)
 
-### Run the App
+### 📦 Option 1: Install via GitHub Packages (Recommended)
+You can install and execute Prefrontal instantly without downloading or tracking the source repository files.
+
+**1. Configure your NPM Registry**  
+Route your local NPM client to look at GitHub Packages for your scoped package name:
 ```bash
-# 1. Open a terminal in the project folder
-# 2. Install dependencies (first time only)
+npm config set @sidx1-scratch:registry https://github.com
+```
+
+**2. Run Instantly with NPX**  
+```bash
+npx @sidx1-scratch/prefrontal
+```
+*(Alternatively, install it globally on your machine using `npm install -g @sidx1-scratch/prefrontal` and type `prefrontal` in any directory to start).*
+
+---
+
+### 🛠️ Option 2: Manual Clone & Run
+If you prefer running the application straight from raw developer source files:
+
+```bash
+# 1. Clone the repository
+git clone https://github.com/sidx1-scratch/prefrontal
+cd prefrontal
+
+# 2. Install dependencies
 npm install
 
 # 3. Start the app
@@ -22,8 +45,8 @@ npm start
 ```
 > A local web server starts and the app opens in your browser automatically at `http://localhost:3000`.
 
-**External or LAN Servers:**
-If you run the AI backend on a different computer (e.g., a home server or a PC on your local network), ensure your server is bound to `0.0.0.0` (as shown below) and simply enter its LAN IP address in the Settings (e.g., `http://192.168.1.100:11434` for Ollama or `http://192.168.1.100:8080/v1` for Llama.cpp).
+**External or LAN Servers:**  
+If you run the AI backend on a different computer (e.g., a home server or a PC on your local network), ensure your server is bound to `0.0.0.0` (as shown below) and simply enter its LAN IP address in the Settings (e.g., `http://192.168.1.100:11434` for Ollama or `http://192.168.1` for Llama.cpp).
 
 ---
 
@@ -33,16 +56,16 @@ You need **one** of the following local runtimes installed and running.
 
 ### Option A: Ollama *(Recommended for Desktop — Windows, macOS, Linux)*
 
-**1. Install Ollama**
-Download from [ollama.com](https://ollama.com/) and run the installer.
+**1. Install Ollama**  
+Download from [ollama.com](https://ollama.com) and run the installer.
 
-**2. Start the Server**
+**2. Start the Server**  
 ```bash
 ollama serve
 ```
 This starts Ollama on `http://localhost:11434`. Keep this terminal open.
 
-**3. Pull a Model**
+**3. Pull a Model**  
 ```bash
 # Recommended — small, fast, great quality:
 ollama pull gemma4:e2b
@@ -53,7 +76,7 @@ ollama pull llama3.2
 ollama pull mistral
 ```
 
-**4. Configure Prefrontal**
+**4. Configure Prefrontal**  
 - Open Settings (⚙️ icon or `Ctrl+,`)
 - Runtime → **Ollama**
 - Server URL → `http://localhost:11434`
@@ -67,24 +90,24 @@ Llama.cpp exposes an OpenAI-compatible REST API, making it easy to use with Pref
 
 #### 🖥️ Desktop (Windows / macOS / Linux)
 
-**Download a pre-built release:**
-[github.com/ggerganov/llama.cpp/releases](https://github.com/ggerganov/llama.cpp/releases)
+**Download a pre-built release:**  
+[://github.com](https://://github.com)
 
 Or build from source:
 ```bash
-git clone https://github.com/ggerganov/llama.cpp
+git clone https://github.com
 cd llama.cpp
 mkdir build && cd build
 cmake .. -DLLAMA_BLAS=ON   # optional: add GPU flags
 cmake --build . --config Release
 ```
 
-**Start the server:**
+**Start the server:**  
 ```bash
 ./llama-server -m models/your_model.gguf --port 8080 --host 0.0.0.0 -c 8192
 ```
 
-**Configure Prefrontal:**
+**Configure Prefrontal:**  
 - Runtime → **Llama.cpp / OpenAI**
 - Server URL → `http://localhost:8080/v1`
 - Model → enter the exact filename of your `.gguf` model (e.g. `gemma-2-2b.gguf`)
@@ -93,46 +116,46 @@ cmake --build . --config Release
 
 #### 📱 Android / Mobile *(via Termux)*
 
-**1. Install Termux**
-Get it from [F-Droid](https://f-droid.org/en/packages/com.termux/) *(not the Play Store version — it's outdated)*.
+**1. Install Termux**  
+Get it from [F-Droid](https://f-droid.org) *(not the Play Store version — it's outdated)*.
 
-**2. Install Dependencies**
+**2. Install Dependencies**  
 ```bash
 pkg update && pkg upgrade
 pkg install clang wget git cmake make python3
 ```
 
-**3. Build Llama.cpp**
+**3. Build Llama.cpp**  
 ```bash
-git clone https://github.com/ggerganov/llama.cpp
+git clone https://github.com
 cd llama.cpp
 mkdir build && cd build
 cmake .. -DCMAKE_BUILD_TYPE=Release
 make -j4
 ```
 
-**4. Download a Model**
+**4. Download a Model**  
 Use a small GGUF model (2–4 GB recommended for mobile):
 ```bash
 mkdir -p ../models
 # Example: download TinyLlama 1.1B Q4 (good for mobile)
-wget -P ../models https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
+wget -P ../models https://huggingface.co
 ```
 
-**5. Start the Server**
+**5. Start the Server**  
 ```bash
 ./bin/llama-server -m ../models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf \
   --port 8080 --host 0.0.0.0 -c 4096
 ```
 
-**6. Open Prefrontal in Termux's Browser**
+**6. Open Prefrontal in Termux's Browser**  
 In another Termux session (or on the same device's browser):
 - Open `http://127.0.0.1:3000` (if running the Node.js server too)
 - Or serve directly with `npx serve` inside the project folder
 
-**Configure Prefrontal:**
+**Configure Prefrontal:**  
 - Runtime → **Llama.cpp / OpenAI**
-- Server URL → `http://127.0.0.1:8080/v1`
+- Server URL → `http://127.0.0`
 - ⚠️ Use `127.0.0.1` instead of `localhost` on Android — they may not resolve the same way
 
 ---
@@ -140,6 +163,7 @@ In another Termux session (or on the same device's browser):
 ## 🎭 Personality Presets
 
 Prefrontal includes **4 built-in personality presets** that change both the system prompt and temperature simultaneously. Switch between them instantly on the welcome screen or in Settings.
+
 
 | Preset | Temp | Best For |
 |--------|------|----------|
@@ -156,6 +180,7 @@ You can also write your own **Custom** system prompt — just edit the System Pr
 
 Temperature controls how random/creative the AI's outputs are:
 
+
 | Value | Behaviour |
 |-------|-----------|
 | `0.0` | Fully deterministic — same input = same output |
@@ -169,6 +194,7 @@ Temperature controls how random/creative the AI's outputs are:
 ---
 
 ## 🎨 Features
+
 
 | Feature | Details |
 |---------|---------|
@@ -189,6 +215,7 @@ Temperature controls how random/creative the AI's outputs are:
 ---
 
 ## ⌨️ Keyboard Shortcuts
+
 
 | Shortcut | Action |
 |----------|--------|
@@ -231,32 +258,5 @@ Temperature controls how random/creative the AI's outputs are:
 
 ---
 
-## 📁 Project Structure
 
-```
-prefrontal/
-├── index.html        # Main app shell
-├── style.css         # All styles (no build step)
-├── app.js            # All app logic (vanilla JS)
-├── package.json      # npm start / serve config
-├── vendor/
-│   ├── marked.min.js         # Markdown renderer
-│   ├── highlight.min.js      # Syntax highlighter
-│   ├── highlight-dark.min.css
-│   └── highlight-light.min.css
-└── README.md
-```
 
----
-
-## 💡 Tips
-
-- **First run**: A setup wizard will ask for your name and avatar. This is stored only on your device.
-- **Model refresh**: When you start Ollama with a new model, click **Refresh** in Settings to see it.
-- **Context size**: If a conversation feels "forgetful", increase `num_ctx` in Settings (needs enough RAM).
-- **Exporting**: Use the download icon (↓) in the topbar to save the current chat as a Markdown file.
-- **Regenerate**: Hover over any AI message and click the ↺ icon to regenerate the response.
-
----
-
-*Prefrontal by **sidx1-scratch** · Built with ⚡ antigravity using Local AI · [github.com/sidx1-scratch](https://github.com/sidx1-scratch)*

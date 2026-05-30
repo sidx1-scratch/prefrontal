@@ -19,24 +19,24 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm ci
+      - run: npm install       # Fixed: Uses install to avoid package-lock errors
       - run: npm test
 
   publish-gpr:
     needs: build
-    # Crucial safeguard: This job only runs if the triggering event was an actual release
+    # Safeguard: This job only runs if the triggering event was an actual release
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write
+      packages: write          # Grants GITHUB_TOKEN permission to upload packages
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          registry-url: https://npm.pkg.github.com/
-      - run: npm ci
+          registry-url: https://github.com
+      - run: npm install       # Fixed: Uses install to avoid package-lock errors
       - run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{secrets.GITHUB_TOKEN}}

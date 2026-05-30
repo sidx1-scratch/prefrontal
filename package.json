@@ -1,6 +1,6 @@
 {
   "name": "@sidx1-scratch/prefrontal",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Prefrontal — Local AI Chatbot",
   "main": "app.js",
   "repository": {

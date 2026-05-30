@@ -5,11 +5,11 @@ name: Node.js Package
 
 on:
   push:
-    branches: [ main ]         # Automatically runs checks on standard pushes
+    branches: [ main ]         
   pull_request:
-    branches: [ main ]         # Automatically runs checks on pull requests
+    branches: [ main ]         
   release:
-    types: [created]           # Automatically triggers the publication on a new release
+    types: [created]           
 
 jobs:
   build:
@@ -19,22 +19,22 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install       # Installs your project dependencies automatically
+      - run: npm install       
 
   publish-gpr:
     needs: build
-    if: github.event_name == 'release' # Security gate: only publishes when you make a release
+    if: github.event_name == 'release' 
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      packages: write          # Grants GITHUB_TOKEN the power to upload packages
+      packages: write          
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          registry-url: https://github.com
+          registry-url: https://npm.pkg.github.com/
       - run: npm install       
-      - run: npm publish
+      - run: npm publish --registry=https://npm.pkg.github.com  # Fixed: Hardcodes the correct registry destination
         env:
           NODE_AUTH_TOKEN: ${{secrets.GITHUB_TOKEN}}

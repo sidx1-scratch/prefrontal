@@ -92,7 +92,7 @@ Llama.cpp exposes an OpenAI-compatible REST API, making it easy to use with Pref
 #### 🖥️ Desktop (Windows / macOS / Linux)
 
 **Download a pre-built release:**  
-https://github.com/ggml-org/llama.cpp/releases/
+https://github.com/ggml-org/llama.cpp/releases/tags
 
 Or build from source:
 ```bash

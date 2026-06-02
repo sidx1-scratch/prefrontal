@@ -125,7 +125,7 @@
             stroke-linejoin="round">
             <circle cx="12" cy="12" r="3" />
             <path
-              d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
+              d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 008.5 15a1.65 1.65 0 001-1.51V13a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06a1.65 1.65 0 00-.33 1.82" />
           </svg>
         </button>
         <button class="btn-icon" id="exportChatBtn" title="Export Chat">
@@ -205,8 +205,7 @@
           </svg>
         </button>
       </div>
-      <div class="input-footer-text">ai but local what the big companies couldnt do · 100% private · No data leaves your
-        machine</div>
+      <div class="input-footer-text">ai but local what the big companies couldnt do · 100% private · No data leaves your machine</div>
     </footer>
   </div>
 
@@ -226,10 +225,11 @@
       <div class="modal-body">
 
         <div class="setting-group">
-          <label class="setting-label">Local AI Runtime</label>
+          <label class="setting-label">AI Runtime</label>
           <div class="shortcut-options" id="runtimeOptions" style="margin-bottom: 12px;">
             <button class="shortcut-btn active" data-runtime="ollama">Ollama</button>
             <button class="shortcut-btn" data-runtime="openai">Llama.cpp / OpenAI</button>
+            <button class="shortcut-btn" data-runtime="openrouter">OpenRouter</button>
           </div>
         </div>
 
@@ -242,19 +242,19 @@
           <div class="server-quick-btns" id="serverQuickBtns">
             <button class="server-quick-btn" data-url="http://localhost:11434" data-runtime="ollama">🏠 Local Ollama</button>
             <button class="server-quick-btn" data-url="http://localhost:8080/v1" data-runtime="openai">🏠 Local Llama.cpp</button>
+            <button class="server-quick-btn" data-url="https://openrouter.ai/api/v1" data-runtime="openrouter">🌐 OpenRouter</button>
             <button class="server-quick-btn" data-url="http://192.168.1.X:11434" data-type="lan">📡 LAN Ollama</button>
-            <button class="server-quick-btn" data-url="https://myserver.example.com" data-type="external">🌐 Custom Remote Host</button>
           </div>
           <p class="setting-hint" id="serverUrlHint">
             Enter any server URL — local, LAN (e.g. <code>http://192.168.1.50:11434</code>), or a remote server.
-            For external servers, ensure CORS is enabled: <code>OLLAMA_ORIGINS=*</code>.
+            For OpenRouter, use your API key. For external servers, ensure CORS is enabled: <code>OLLAMA_ORIGINS=*</code>.
           </p>
         </div>
 
         <div class="setting-group">
           <label class="setting-label">API Key <span style="font-size:10.5px;font-weight:normal;color:var(--text-muted)">(Optional)</span></label>
-          <input type="password" class="setting-input" id="apiKey" autocomplete="off" placeholder="sk-..." />
-          <p class="setting-hint">Required for commercial OpenAI-compatible providers (OpenAI, Groq, Anthropic etc). Stored locally.</p>
+          <input type="password" class="setting-input" id="apiKey" autocomplete="off" placeholder="sk-... (required for OpenRouter)" />
+          <p class="setting-hint">Required for OpenRouter and commercial OpenAI-compatible providers (Groq, Anthropic, etc). Get a free OpenRouter key at <a href="https://openrouter.com/keys" target="_blank" style="color:var(--accent-color);text-decoration:underline">openrouter.com/keys</a>. Stored locally.</p>
         </div>
 
         <div class="setting-group">
@@ -298,7 +298,7 @@
           <label class="setting-label">System Prompt</label>
           <textarea class="setting-input setting-textarea" id="systemPrompt"
             placeholder="You are a helpful AI assistant…"
-            rows="4">You are Prefrontal, a helpful, honest, and harmless AI assistant. You are running entirely locally on the user's device with complete privacy. Be concise, clear, and friendly. Format code in fenced code blocks with the language specified.</textarea>
+            rows="4">You are Prefrontal, a helpful, honest, and harmless AI assistant. You are running entirely locally on the user's device with complete privacy. Be concise, clear, and friendly.</textarea>
           <p class="setting-hint">Defines the assistant's personality and behaviour. Editing this manually will deselect any preset.</p>
         </div>
 

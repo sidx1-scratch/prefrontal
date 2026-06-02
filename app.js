@@ -13,9 +13,9 @@ const state = {
   abortController: null,
   settings: {
     serverUrl:    'http://localhost:11434',
-    runtime:      'ollama', // 'ollama' | 'openai'
+    runtime:      'ollama', // 'ollama' | 'openai' | 'openrouter'
     model:        'gemma4:e2b',
-    systemPrompt: 'You are Prefrontal, a helpful, honest, and harmless AI assistant. You are running entirely locally on the user\'s device with complete privacy. Be concise, clear, and friendly. Format code in fenced code blocks with the language specified.',
+    systemPrompt: 'You are Prefrontal, a helpful, honest, and harmless AI assistant. You are running entirely locally on the user\'s device with complete privacy. Be concise, clear, and friendly.',
     temperature:  0.7,
     numCtx:       8192,
     stream:       true,
@@ -35,22 +35,22 @@ const PERSONALITY_PRESETS = {
   balanced: {
     name: 'Balanced',
     temperature: 0.7,
-    systemPrompt: 'You are Prefrontal, a helpful, honest, and harmless AI assistant. You are running entirely locally on the user\'s device with complete privacy. Be concise, clear, and friendly. Format code in fenced code blocks with the language specified.',
+    systemPrompt: 'You are Prefrontal, a helpful, honest, and harmless AI assistant. You are running entirely locally on the user\'s device with complete privacy. Be concise, clear, and friendly.',
   },
   creative: {
     name: 'Creative',
     temperature: 1.1,
-    systemPrompt: 'You are Prefrontal, a creative and imaginative AI muse running entirely locally on the user\'s device. Be expressive, playful, and explore ideas with flair. Use vivid language, analogies, and original thinking. Don\'t be afraid to be surprising or unconventional. Format code in fenced code blocks.',
+    systemPrompt: 'You are Prefrontal, a creative and imaginative AI muse running entirely locally on the user\'s device. Be expressive, playful, and explore ideas with flair. Use vivid language, metaphors, and creative thinking.',
   },
   precise: {
     name: 'Precise',
     temperature: 0.2,
-    systemPrompt: 'You are Prefrontal, a precise and factual AI assistant running entirely locally. Be concise, direct, and accurate. Avoid filler, preamble, and unnecessary repetition. Answer exactly what is asked, nothing more. Use bullet points and numbered lists where appropriate. Format code in fenced code blocks.',
+    systemPrompt: 'You are Prefrontal, a precise and factual AI assistant running entirely locally. Be concise, direct, and accurate. Avoid filler, preamble, and unnecessary repetition. Answer exactly what is asked.',
   },
   developer: {
     name: 'Developer',
     temperature: 0.3,
-    systemPrompt: 'You are Prefrontal, a senior software engineer and code review AI running entirely locally. Prioritize working, idiomatic code above all else. Be terse and technical — skip hand-holding and pleasantries. Always specify the language in fenced code blocks. Point out potential bugs, edge cases, and performance issues.',
+    systemPrompt: 'You are Prefrontal, a senior software engineer and code review AI running entirely locally. Prioritize working, idiomatic code above all else. Be terse and technical — skip hand-holding.',
   },
   custom: {
     name: 'Custom',
@@ -302,7 +302,7 @@ function renderMarkdown(text) {
   // Add copy buttons and headers to code blocks
   html = html.replace(/<pre><code(?: class="language-([^"]+)")?>([\s\S]*?)<\/code><\/pre>/g, (_, lang, code) => {
     const l = lang || 'text';
-    return `<div class="code-block-wrapper"><pre><div class="code-header"><span class="code-lang">${l}</span><button class="copy-code-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy</button></div><code class="language-${l}">${code}</code></pre></div>`;
+    return `<div class="code-block-wrapper"><pre><div class="code-header"><span class="code-lang">${l}</span><button class="copy-code-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M16 3H7a2 2 0 00-2 2v13a2 2 0 002 2h9a2 2 0 002-2V5a2 2 0 00-2-2z"/></svg></button></div><code>${code}</code></pre></div>`;
   });
   return html;
 }
@@ -315,10 +315,10 @@ window.copyCode = function(btn) {
   const code = btn.closest('pre').querySelector('code');
   navigator.clipboard.writeText(code.innerText).then(() => {
     btn.classList.add('copied');
-    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><polyline points="20 6 9 17 4 12"/></svg> Copied!`;
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><polyline points="20 6 9 17 4 12"/></svg>`;
     setTimeout(() => {
       btn.classList.remove('copied');
-      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg> Copy`;
+      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M16 3H7a2 2 0 00-2 2v13a2 2 0 002 2h9a2 2 0 002-2V5a2 2 0 00-2-2z"/></svg>`;
     }, 2000);
   });
 };
@@ -376,7 +376,7 @@ function renderChatList(filter = '') {
   const filtered = filter ? ids.filter(id => state.chats[id].title.toLowerCase().includes(filter.toLowerCase())) : ids;
 
   if (filtered.length === 0) {
-    els.chatList.innerHTML = `<div class="empty-chat-list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><br>${filter ? 'No results found' : 'No conversations yet'}</div>`;
+    els.chatList.innerHTML = `<div class="empty-chat-list"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg><span>No conversations yet</span></div>`;
     return;
   }
 
@@ -449,11 +449,11 @@ function appendMessageEl(msg) {
 
   const avatarContent = msg.role === 'user'
     ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:17px;height:17px;color:#fff"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`
-    : `<svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:20px;height:20px"><circle cx="18" cy="18" r="18" fill="url(#ag${msg.id?.slice(-4)||'x'})"/><path d="M24 14h-5.5a2.5 2.5 0 000 5H21a2.5 2.5 0 010 5h-6" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/><circle cx="18" cy="10" r="2" fill="#fff"/><circle cx="18" cy="26" r="2" fill="#fff"/><defs><linearGradient id="ag${msg.id?.slice(-4)||'x'}" x1="0" y1="0" x2="36" y2="36"><stop offset="0%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#06b6d4"/></linearGradient></defs></svg>`;
+    : `<svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:20px;height:20px"><circle cx="18" cy="18" r="18" fill="url(#ag${msg.id?.slice(-4)||'x'})"/><path d="M24 14h-5.5a2.5 2.5 0 000 5H21a2.5 2.5 0 010 5h-6" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/><defs><linearGradient id="ag${msg.id?.slice(-4)||'x'}" x1="0" y1="0" x2="36" y2="36"><stop offset="0%" stop-color="#10a37f"/><stop offset="100%" stop-color="#0d8965"/></linearGradient></defs></svg>`;
 
   const copyIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`;
   const regenIcon = msg.role === 'assistant' ? `<button class="msg-action-btn" onclick="regenerateFrom('${msg.id}')" title="Regenerate">${regenSvg()}</button>` : '';
-  const delIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>`;
+  const delIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2m4 5v6m-4-6v6"/></svg>`;
 
   const renderedContent = msg.role === 'assistant' ? renderMarkdown(msg.content) : `<p>${escapeHtml(msg.content).replace(/\n/g,'<br>')}</p>`;
 
@@ -475,7 +475,7 @@ function appendMessageEl(msg) {
   return el;
 }
 
-function regenSvg() { return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 102.13-9.36L1 10"/></svg>`; }
+function regenSvg() { return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1015.85-5.5"/></svg>`; }
 
 window.copyMsgContent = function(id) {
   const chat = state.chats[state.activeChatId];
@@ -567,7 +567,7 @@ async function sendRequest() {
   const avatarId = assistantMsg.id.slice(-4);
   msgEl.innerHTML = `
     <div class="msg-avatar">
-      <svg viewBox="0 0 36 36" fill="none" style="width:20px;height:20px"><circle cx="18" cy="18" r="18" fill="url(#ag${avatarId})"/><path d="M24 14h-5.5a2.5 2.5 0 000 5H21a2.5 2.5 0 010 5h-6" stroke="#fff" stroke-width="2.2" stroke-linecap="round"/><circle cx="18" cy="10" r="2" fill="#fff"/><circle cx="18" cy="26" r="2" fill="#fff"/><defs><linearGradient id="ag${avatarId}" x1="0" y1="0" x2="36" y2="36"><stop offset="0%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#06b6d4"/></linearGradient></defs></svg>
+      <svg viewBox="0 0 36 36" fill="none" style="width:20px;height:20px"><circle cx="18" cy="18" r="18" fill="url(#ag${avatarId})"/><path d="M24 14h-5.5a2.5 2.5 0 000 5H21a2.5 2.5 0 010 5h-6" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/><defs><linearGradient id="ag${avatarId}" x1="0" y1="0" x2="36" y2="36"><stop offset="0%" stop-color="#10a37f"/><stop offset="100%" stop-color="#0d8965"/></linearGradient></defs></svg>
     </div>
     <div class="msg-bubble">
       <div class="msg-content"><div class="thinking-dots"><span></span><span></span><span></span></div></div>
@@ -578,7 +578,7 @@ async function sendRequest() {
   // Stop button
   const stopWrapper = document.createElement('div');
   stopWrapper.className = 'stop-btn-wrapper';
-  stopWrapper.innerHTML = `<button class="stop-btn visible" id="stopGenBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg> Stop generating</button>`;
+  stopWrapper.innerHTML = `<button class="stop-btn visible" id="stopGenBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="1"/></svg> Stop</button>`;
   els.messagesWrapper.appendChild(stopWrapper);
   $('stopGenBtn')?.addEventListener('click', () => {
     state.abortController?.abort();
@@ -591,8 +591,13 @@ async function sendRequest() {
   try {
     let url, payload;
     
-    if (state.settings.runtime === 'openai') {
-      url = `${state.settings.serverUrl.replace(/\/$/, '')}/v1/chat/completions`;
+    if (state.settings.runtime === 'openai' || state.settings.runtime === 'openrouter') {
+      url = `${state.settings.serverUrl.replace(/\/$/, '')}/chat/completions`;
+      if (state.settings.runtime === 'openrouter') {
+        url = 'https://openrouter.ai/api/v1/chat/completions';
+      } else {
+        url = `${state.settings.serverUrl.replace(/\/$/, '')}/v1/chat/completions`;
+      }
       payload = {
         model: state.settings.model,
         messages,
@@ -613,7 +618,7 @@ async function sendRequest() {
     }
 
     const headers = { 'Content-Type': 'application/json' };
-    if (state.settings.apiKey && state.settings.runtime === 'openai') {
+    if (state.settings.apiKey && (state.settings.runtime === 'openai' || state.settings.runtime === 'openrouter')) {
       headers['Authorization'] = `Bearer ${state.settings.apiKey}`;
     }
 
@@ -647,7 +652,8 @@ async function sendRequest() {
           const tLine = line.trim();
           if (!tLine) continue;
           
-          if (state.settings.runtime === 'openai') {
+          if (state.settings.runtime === 'openai' || state.settings.runtime === 'openrouter') {
+            // OpenAI/OpenRouter SSE format
             if (tLine.startsWith('data: ')) {
               const dataStr = tLine.slice(6).trim();
               if (dataStr === '[DONE]') continue;
@@ -659,7 +665,9 @@ async function sendRequest() {
                   contentEl.innerHTML = renderMarkdown(fullText) + '<span class="typing-cursor"></span>';
                   if (state.settings.autoScroll) scrollToBottom();
                 }
-              } catch(pe) {}
+              } catch(pe) {
+                // Silent fail on parse errors
+              }
             }
           } else {
             // Ollama NDJSON
@@ -674,13 +682,15 @@ async function sendRequest() {
                 state.totalTokens += (data.prompt_eval_count || 0) + (data.eval_count || 0);
                 updateTokenCounter();
               }
-            } catch(pe) {}
+            } catch(pe) {
+              // Silent fail
+            }
           }
         }
       }
     } else {
       const data = await response.json();
-      if (state.settings.runtime === 'openai') {
+      if (state.settings.runtime === 'openai' || state.settings.runtime === 'openrouter') {
         fullText = data.choices?.[0]?.message?.content || '';
         if (data.usage?.total_tokens) {
           state.totalTokens += data.usage.total_tokens;
@@ -729,7 +739,7 @@ async function sendRequest() {
       <div class="msg-actions">
         <button class="msg-action-btn" onclick="copyMsgContent('${assistantMsg.id}')" title="Copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>
         <button class="msg-action-btn" onclick="regenerateFrom('${assistantMsg.id}')" title="Regenerate">${regenSvg()}</button>
-        <button class="msg-action-btn" onclick="deleteMessage('${assistantMsg.id}')" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
+        <button class="msg-action-btn" onclick="deleteMessage('${assistantMsg.id}')" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2m4 5v6m-4-6v6"/></svg></button>
       </div>`;
     state.isGenerating = false;
     setSendingState(false);
@@ -743,10 +753,13 @@ async function sendRequest() {
 function formatError(err) {
   const msg = err.message || String(err);
   if (msg.includes('Failed to fetch') || msg.includes('fetch')) {
-    return 'Cannot connect to server. Make sure your local AI runtime (Ollama or Llama.cpp) is running on the correct Server URL.';
+    return 'Cannot connect to server. Make sure your AI runtime is running on the correct Server URL.';
   }
   if (msg.includes('model') || msg.includes('404')) {
-    return `Model "${state.settings.model}" not found on server. Try refreshing models or pulling it.`;
+    return `Model "${state.settings.model}" not found on server. Try refreshing models.`;
+  }
+  if (msg.includes('401') || msg.includes('Unauthorized')) {
+    return 'Authentication failed. Check your API key.';
   }
   return msg;
 }
@@ -758,7 +771,7 @@ function setSendingState(loading) {
   if (loading) {
     els.sendBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
   } else {
-    els.sendBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>`;
+    els.sendBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>`;
     els.userInput.focus();
   }
 }
@@ -779,33 +792,38 @@ async function checkServer() {
   setStatus('loading', 'Connecting to server…');
   try {
     let url;
-    if (state.settings.runtime === 'openai') {
+    if (state.settings.runtime === 'openrouter') {
+      url = 'https://openrouter.ai/api/v1/models';
+    } else if (state.settings.runtime === 'openai') {
       url = `${state.settings.serverUrl.replace(/\/$/, '')}/v1/models`;
     } else {
       url = `${state.settings.serverUrl.replace(/\/$/, '')}/api/tags`;
     }
     const headers = {};
-    if (state.settings.apiKey && state.settings.runtime === 'openai') {
+    if (state.settings.apiKey && (state.settings.runtime === 'openai' || state.settings.runtime === 'openrouter')) {
       headers['Authorization'] = `Bearer ${state.settings.apiKey}`;
     }
-    const r = await fetch(url, { signal: AbortSignal.timeout(4000), headers });
+    const r = await fetch(url, { signal: AbortSignal.timeout(8000), headers });
     if (r.ok) {
       const data = await r.json();
       let models = [];
-      if (state.settings.runtime === 'openai') {
+      if (state.settings.runtime === 'openrouter') {
+        models = data.data?.map?.(m => ({ name: m.id })).slice(0, 50) || [];
+      } else if (state.settings.runtime === 'openai') {
         models = data.data?.map?.(m => ({ name: m.id || m.name })) || [];
       } else {
         models = data.models || [];
       }
       const modelCount = models.length;
       setStatus('online', `Connected · ${modelCount} model${modelCount !== 1 ? 's' : ''} available`);
-      // Update model dot in badge
       document.querySelector('.model-dot')?.classList.remove('offline');
       return models;
     }
     throw new Error(`HTTP ${r.status}`);
   } catch(e) {
-    if (state.settings.runtime === 'openai') {
+    if (state.settings.runtime === 'openrouter') {
+      setStatus('error', 'OpenRouter not accessible — check API key & internet');
+    } else if (state.settings.runtime === 'openai') {
       setStatus('error', 'Server not detected — is Llama.cpp running?');
     } else {
       setStatus('error', 'Ollama not detected — open a terminal and run: ollama serve');
@@ -816,6 +834,7 @@ async function checkServer() {
 }
 
 async function fetchAndShowModels() {
+  els.modelList.innerHTML = '<span style="font-size:12px;color:var(--text-muted)">Loading models…</span>';
   const models = await checkServer();
   els.modelList.innerHTML = '';
   if (models.length === 0) {
@@ -856,7 +875,7 @@ function exportAllChats() {
   const ids = Object.keys(state.chats);
   if (ids.length === 0) { toast('No chats to export', 'warn'); return; }
   const data = { exported: new Date().toISOString(), model: state.settings.model, chats: Object.values(state.chats) };
-  download('gemmachat_export.json', JSON.stringify(data, null, 2));
+  download('prefrontal_export.json', JSON.stringify(data, null, 2));
   toast(`Exported ${ids.length} chat${ids.length !== 1 ? 's' : ''}!`, 'success');
 }
 
@@ -933,7 +952,6 @@ function updateServerBadge(url) {
 }
 
 function updateServerUrlHint(runtime) {
-  // The hint is now static HTML with CORS info — only update if runtime changes the default URL
   updateServerBadge(els.serverUrl?.value || '');
 }
 
@@ -1016,7 +1034,7 @@ function saveSettingsFromModal() {
 function resetSettings() {
   const defaults = {
     serverUrl: 'http://localhost:11434', runtime: 'ollama', model: 'gemma4:e2b',
-    systemPrompt: 'You are Prefrontal, a helpful, honest, and harmless AI assistant powered by Gemma 4 E2B. You are running entirely locally on the user\'s device with complete privacy. Be concise, clear, and friendly. Format code in fenced code blocks with the language specified.',
+    systemPrompt: 'You are Prefrontal, a helpful, honest, and harmless AI assistant. You are running entirely locally on the user\'s device with complete privacy. Be concise, clear, and friendly.',
     temperature: 0.7, numCtx: 8192, stream: true, autoScroll: true, sound: false, sendMode: 'enter', theme: 'dark',
   };
   Object.assign(state.settings, defaults);
@@ -1113,9 +1131,11 @@ function bindEvents() {
       const rt = btn.dataset.runtime;
       if (rt) {
         updateServerUrlHint(rt);
-        if (rt === 'openai' && els.serverUrl.value === 'http://localhost:11434') {
-          els.serverUrl.value = 'http://localhost:8080/v1'; // Auto-suggest llama.cpp default
-        } else if (rt === 'ollama' && els.serverUrl.value === 'http://localhost:8080/v1') {
+        if (rt === 'openrouter') {
+          els.serverUrl.value = 'https://openrouter.ai/api/v1';
+        } else if (rt === 'openai' && els.serverUrl.value === 'http://localhost:11434') {
+          els.serverUrl.value = 'http://localhost:8080/v1';
+        } else if (rt === 'ollama' && (els.serverUrl.value === 'http://localhost:8080/v1' || els.serverUrl.value === 'https://openrouter.ai/api/v1')) {
           els.serverUrl.value = 'http://localhost:11434';
         }
       }
@@ -1127,7 +1147,6 @@ function bindEvents() {
     const val = parseFloat(e.target.value);
     els.tempDisplay.textContent = val.toFixed(2);
     if (els.tempBadge) els.tempBadge.textContent = getTempBadgeLabel(val);
-    // Any manual drag = custom (deselect presets visually but keep current personality)
   });
   // Context slider
   els.ctxSlider.addEventListener('input', e => {
@@ -1311,7 +1330,7 @@ function openProfileModal() {
 }
 
 function updateProfilePreview() {
-  const avatar = els.profileAvatarGrid?.querySelector('.avatar-btn.selected')?.dataset.emoji || state.profile?.avatar || '🧠';
+  const avatar = els.profileAvatarGrid?.querySelector('.avatar-btn.selected')?.data-emoji || state.profile?.avatar || '🧠';
   const name   = els.profileNameInput?.value.trim() || state.profile?.displayName || 'Anonymous';
   if (els.profilePreviewAvatar) els.profilePreviewAvatar.textContent = avatar;
   if (els.profilePreviewName)   els.profilePreviewName.textContent = name;

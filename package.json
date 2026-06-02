@@ -1,16 +1,25 @@
 {
   "name": "@sidx1-scratch/prefrontal",
-  "version": "1.0.5",
-  "description": "Prefrontal — Local AI Chatbot",
+  "version": "1.1.0",
+  "description": "Prefrontal — Local AI Chatbot · 100% Private · OpenRouter + Ollama + Llama.cpp",
   "main": "app.js",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com"
+    "url": "git+https://github.com/sidx1-scratch/prefrontal"
   },
   "scripts": {
     "start": "npx -y serve ."
   },
-  "keywords": [],
-  "author": "",
-  "license": "MIT"
+  "keywords": [
+    "ai",
+    "local",
+    "offline",
+    "private",
+    "ollama",
+    "openrouter",
+    "llama",
+    "chatbot"
+  ],
+  "author": "sidx1-scratch",
+  "license": "GPL-3.0"
 }

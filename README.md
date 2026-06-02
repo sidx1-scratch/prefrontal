@@ -21,11 +21,12 @@ Route your local NPM client to look at GitHub Packages for your scoped package n
 npm login --scope=@NAMESPACE --auth-type=legacy --registry=https://npm.pkg.github.com
 ```
 ( username is your github username and the password is a personal accses token made at github.com/settings/tokens)
-**2. Run Instantly with NPX**  
+**2. Run Instantly with NPM**  
 ```bash
-npx @sidx1-scratch/prefrontal
+npm explore @sidx1-scratch/prefrontal -- npm start
+
 ```
-*(Alternatively, install it globally on your machine using `npm install -g @sidx1-scratch/prefrontal` and type `npm start` in the install directory to start).*
+ install it globally on your machine using `npm install -g @sidx1-scratch/prefrontal` and then run the command above
 
 ---
 

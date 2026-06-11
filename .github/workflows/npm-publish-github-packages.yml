@@ -1,19 +1,15 @@
-name: Node.js CI + Release + GitHub Packages
+name: Auto Release + GitHub Packages
 
 on:
   push:
     branches: [ main ]
-  pull_request:
-    branches: [ main ]
-  release:
-    types: [created]
 
 permissions:
   contents: write
   packages: write
 
 jobs:
-  build:
+  release:
     runs-on: ubuntu-latest
 
     steps:
@@ -25,77 +21,41 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+          registry-url: https://npm.pkg.github.com/
 
-      # Install root dependencies
-      - name: Install dependencies
+      # Install dependencies
+      - name: Install deps
         run: npm install
 
-      # Auto bump version on push only
-      - name: Auto bump version
-        if: github.event_name == 'push'
+      # AUTO BUMP VERSION (fixes your 1.0.8 issue forever)
+      - name: Bump version
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+
           npm version patch -m "auto version bump %s"
 
-      # Optional build step
-      - name: Build project
-        run: npm run build --if-present
-
-      # Create clean package (ROOT app only)
-      - name: Create dist package
+      # Push version bump back to repo
+      - name: Push version bump
         run: |
-          mkdir dist
+          git push origin main --follow-tags
 
-          rsync -av \
-            --exclude="docs" \
-            --exclude="README.md" \
-            --exclude="LICENSE" \
-            --exclude=".github" \
-            ./ dist/
+      # Get new version
+      - name: Read version
+        id: version
+        run: echo "ver=$(node -p \"require('./package.json').version\")" >> $GITHUB_OUTPUT
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      # Create GitHub Release automatically
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
         with:
-          name: app-package
-          path: dist
+          tag_name: v${{ steps.version.outputs.ver }}
+          name: v${{ steps.version.outputs.ver }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-
-  publish:
-    needs: build
-    if: github.event_name == 'release'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          registry-url: https://npm.pkg.github.com/
-
-      - name: Install dependencies
-        run: npm install
-
-      - name: Publish to GitHub Packages
+      # Publish to GitHub Packages
+      - name: Publish package
         run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-
-  release-assets:
-    needs: publish
-    if: github.event_name == 'release'
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/download-artifact@v4
-        with:
-          name: app-package
-
-      - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: app-package/**
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

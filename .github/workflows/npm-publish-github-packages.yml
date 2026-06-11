@@ -1,40 +1,101 @@
-# This workflow runs automatically on every push and pull request, 
-# and safely publishes the package only when a release is created.
-
-name: Node.js Package
+name: Node.js CI + Release + GitHub Packages
 
 on:
   push:
-    branches: [ main ]         
+    branches: [ main ]
   pull_request:
-    branches: [ main ]         
+    branches: [ main ]
   release:
-    types: [created]           
+    types: [created]
+
+permissions:
+  contents: write
+  packages: write
 
 jobs:
   build:
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-      - run: npm install       
 
-  publish-gpr:
+      # Install root dependencies
+      - name: Install dependencies
+        run: npm install
+
+      # Auto bump version on push only
+      - name: Auto bump version
+        if: github.event_name == 'push'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          npm version patch -m "auto version bump %s"
+
+      # Optional build step
+      - name: Build project
+        run: npm run build --if-present
+
+      # Create clean package (ROOT app only)
+      - name: Create dist package
+        run: |
+          mkdir dist
+
+          rsync -av \
+            --exclude="docs" \
+            --exclude="README.md" \
+            --exclude="LICENSE" \
+            --exclude=".github" \
+            ./ dist/
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-package
+          path: dist
+
+
+  publish:
     needs: build
-    if: github.event_name == 'release' 
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write          
+
     steps:
       - uses: actions/checkout@v4
+
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           registry-url: https://npm.pkg.github.com/
-      - run: npm install       
-      - run: npm publish --registry=https://npm.pkg.github.com  # Fixed: Hardcodes the correct registry destination
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Publish to GitHub Packages
+        run: npm publish
         env:
-          NODE_AUTH_TOKEN: ${{secrets.GITHUB_TOKEN}}
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+
+  release-assets:
+    needs: publish
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: app-package
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: app-package/**
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

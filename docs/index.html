@@ -1,1 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Prefrontal AI Frontend</title>
 
+<style>
+:root {
+  --bg: #120a1f;
+  --panel: #1a1030;
+  --purple: #6a0dad;
+  --blue: #3b82f6;
+  --red: #ef4444;
+  --text: #e5e7eb;
+}
+
+body {
+  margin: 0;
+  font-family: Arial, sans-serif;
+  background: radial-gradient(circle at top, #1b0f2e, var(--bg));
+  color: var(--text);
+}
+
+header {
+  padding: 60px 20px;
+  text-align: center;
+}
+
+h1 {
+  margin: 0;
+  font-size: 3rem;
+  color: var(--purple);
+}
+
+.subtitle {
+  color: #b8b8c7;
+  margin-top: 10px;
+}
+
+.badges {
+  margin-top: 15px;
+}
+
+.badge {
+  display: inline-block;
+  padding: 5px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  margin: 4px;
+}
+
+.purple { background: var(--purple); }
+.blue { background: var(--blue); }
+.red { background: var(--red); }
+
+/* sections */
+.container {
+  max-width: 1000px;
+  margin: auto;
+  padding: 20px;
+}
+
+.section {
+  background: var(--panel);
+  border: 1px solid rgba(255,255,255,0.05);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+h2 {
+  color: var(--purple);
+  margin-top: 0;
+}
+
+/* buttons */
+a.button {
+  display: inline-block;
+  margin-top: 10px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: var(--purple);
+  color: white;
+  text-decoration: none;
+}
+
+a.button:hover {
+  background: #8b2be2;
+}
+
+/* feature grid */
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 15px;
+}
+
+.card {
+  background: #140c25;
+  padding: 15px;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.05);
+}
+
+footer {
+  text-align: center;
+  padding: 30px;
+  color: #777;
+}
+</style>
+</head>
+
+<body>
+
+<header>
+  <h1>Prefrontal</h1>
+  <div class="subtitle">
+    A unified frontend for local + cloud AI models
+  </div>
+
+  <div class="badges">
+    <span class="badge purple">Ollama</span>
+    <span class="badge blue">OpenRouter</span>
+    <span class="badge red">llama.cpp</span>
+  </div>
+</header>
+
+<div class="container">
+
+  <div class="section">
+    <h2>Overview</h2>
+    <p>
+      Prefrontal is a frontend interface that connects multiple AI backends including
+      local inference (Ollama, llama.cpp) and cloud APIs (OpenRouter).
+      It acts as a unified control layer for switching between models seamlessly.
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>Key Features</h2>
+
+    <div class="grid">
+      <div class="card">
+        🔌 Multi-backend support
+      </div>
+      <div class="card">
+        🧠 Local model execution
+      </div>
+      <div class="card">
+        🌐 Cloud API routing
+      </div>
+      <div class="card">
+        ⚡ Fast switching between models
+      </div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Tech Stack</h2>
+    <p>
+      Built to interface with Ollama, 
+      <span style="color:#3b82f6;">OpenRouter</span>, and 
+      <span style="color:#ef4444;">llama.cpp</span>.
+      Designed as a modular frontend system for AI routing.
+    </p>
+  </div>
+
+  <div class="section">
+    <h2>Links</h2>
+    <a class="button" href="#">View Source Code</a>
+    <a class="button" href="#" style="margin-left:10px;">Launch App</a>
+  </div>
+
+</div>
+
+<footer>
+  Prefrontal AI Frontend • Project Documentation Page
+</footer>
+
+</body>
+</html>

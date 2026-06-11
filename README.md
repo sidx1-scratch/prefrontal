@@ -11,9 +11,33 @@ Prefrontal is an open-source, privacy-first chat interface for local AI models. 
 
 ---
 
-## ⚡ Quick Start (Desktop — 3 steps)
+## ⚡ Quick Start
 
-This is the fastest path. Assumes you're on Windows, macOS, or Linux.
+### 🌐 Easiest: OpenRouter *(no local AI install needed)*
+
+OpenRouter gives you free access to powerful cloud models — no GPU, no Ollama, nothing extra to install. The fastest way to get running.
+
+**1. Get a free API key**
+Sign up at [openrouter.ai](https://openrouter.ai) and copy your API key from the dashboard.
+
+**2. Install and run Prefrontal**
+```bash
+git clone https://github.com/sidx1-scratch/prefrontal
+cd prefrontal
+npm install && npm start
+```
+
+**3. Configure and go**
+Open `http://localhost:3000`, go to Settings, and set:
+- Runtime → **OpenRouter**
+- API Key → paste your key
+- Model → pick any free model (e.g. `mistralai/mistral-7b-instruct:free`)
+
+Done — no GPU or model download required.
+
+---
+
+### 🖥️ Fully Offline: Ollama *(no API key, your data never leaves your machine)*
 
 **1. Install Ollama and pull a model**
 ```bash
@@ -29,13 +53,13 @@ cd prefrontal
 npm install && npm start
 ```
 
-**3. Open your browser**
-```
-http://localhost:3000
-```
-Go to Settings → set Runtime to **Ollama**, Server URL to `http://localhost:11434`, Model to `gemma4:e2b`. Done.
+**3. Configure and go**
+Open `http://localhost:3000`, go to Settings, and set:
+- Runtime → **Ollama**
+- Server URL → `http://localhost:11434`
+- Model → `gemma4:e2b`
 
-> For Android, advanced backends, LAN servers, and other options — see the full setup guide below.
+> For Android, LAN servers, Llama.cpp, and other options — see the full setup guide below.
 
 ---
 
@@ -80,9 +104,33 @@ A local web server starts and the app opens automatically at `http://localhost:3
 
 ## 🧠 Setting Up Your AI Backend
 
-You need **one** of the following local runtimes installed and running.
+You need **one** of the following backends. Pick whichever suits your setup.
 
-### Option A: Ollama *(Recommended for Desktop — Windows, macOS, Linux)*
+### Option A: OpenRouter *(Easiest — no local install, free models available)*
+
+OpenRouter is an API that routes to dozens of AI models, many of which are completely free. No GPU or model download required — just an API key.
+
+**1. Create a free account**
+Sign up at [openrouter.ai](https://openrouter.ai) and grab your API key from [openrouter.ai/keys](https://openrouter.ai/keys).
+
+**2. Configure Prefrontal**
+- Runtime → **OpenRouter**
+- API Key → paste your key
+- Model → enter any model ID from [openrouter.ai/models](https://openrouter.ai/models)
+
+**Recommended free models to start with:**
+
+| Model | ID |
+|-------|----|
+| Mistral 7B Instruct | `mistralai/mistral-7b-instruct:free` |
+| Llama 3.1 8B | `meta-llama/llama-3.1-8b-instruct:free` |
+| Gemma 3 4B | `google/gemma-3-4b-it:free` |
+
+> Free models may have rate limits. Check [openrouter.ai/models?q=free](https://openrouter.ai/models?q=free) for the current free tier.
+
+---
+
+### Option B: Ollama *(Best for fully offline use — Windows, macOS, Linux)*
 
 **1. Install Ollama**
 Download from [ollama.com](https://ollama.com) and run the installer.
@@ -112,7 +160,7 @@ ollama pull mistral
 
 ---
 
-### Option B: Llama.cpp *(Cross-platform: Windows, macOS, Linux, Android)*
+### Option C: Llama.cpp *(Cross-platform: Windows, macOS, Linux, Android)*
 
 Llama.cpp exposes an OpenAI-compatible REST API.
 
@@ -234,7 +282,7 @@ Temperature controls how random or creative the AI's outputs are.
 | 🔄 **Streaming** | Real-time token-by-token generation |
 | 🎭 **Personality Presets** | 4 built-in modes with one click |
 | 🌡️ **Temperature Control** | Live-sent with every request |
-| 📚 **Multi-Backend** | Ollama and Llama.cpp over local or LAN |
+| 📚 **Multi-Backend** | OpenRouter (cloud), Ollama, and Llama.cpp over local or LAN |
 | 🌐 **LAN & External** | Connect to dedicated AI servers on your network |
 | 💾 **Multi-Chat** | Unlimited saved local conversations |
 | 🔍 **Search** | Instant conversation search |

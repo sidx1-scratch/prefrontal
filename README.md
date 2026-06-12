@@ -2,7 +2,7 @@
 
 ![Node.js](https://img.shields.io/badge/Node.js-v18%2B-brightgreen?logo=node.js)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-blue)
-![License](https://img.shields.io/badge/license-MIT-lightgrey)
+![License](https://img.shields.io/badge/license-%20%20GNU%20GPLv3%20-green?)
 ![Offline](https://img.shields.io/badge/100%25-Offline-success)
 
 ### 100% Offline · No Ads · No API Keys · Your Data Stays on Your Device

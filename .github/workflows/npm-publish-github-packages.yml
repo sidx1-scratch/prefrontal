@@ -4,12 +4,6 @@ on:
   push:
     branches:
       - main
-    paths-ignore:
-      - 'docs/**'
-      - '.github/workflows/**'
-      - 'README.md'
-      - 'readme.md'
-      - 'LICENSE'
 
 permissions:
   contents: write
@@ -21,12 +15,14 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
           persist-credentials: true
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           registry-url: https://npm.pkg.github.com/
@@ -34,15 +30,15 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      - name: Configure git
+      - name: Configure Git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-      - name: Bump version
+      - name: Bump version (patch)
         run: npm version patch -m "auto version bump %s"
 
-      - name: Push version bump
+      - name: Push commit + tags
         run: git push origin main --follow-tags
 
       - name: Read version
@@ -51,7 +47,7 @@ jobs:
           ver=$(node -p "require('./package.json').version")
           echo "ver=$ver" >> $GITHUB_OUTPUT
 
-      - name: Create Release
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.version.outputs.ver }}
@@ -59,7 +55,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Configure npm auth
+      - name: Setup npm auth
         run: |
           echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> ~/.npmrc
         env:

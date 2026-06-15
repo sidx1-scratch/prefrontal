@@ -2,7 +2,14 @@ name: Auto Release + GitHub Packages
 
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
+    paths-ignore:
+      - 'docs/**'
+      - '.github/workflows/**'
+      - 'README.md'
+      - 'readme.md'
+      - 'LICENSE'
 
 permissions:
   contents: write
@@ -10,44 +17,40 @@ permissions:
 
 jobs:
   release:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          persist-credentials: true
 
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           registry-url: https://npm.pkg.github.com/
 
-      # Install dependencies
       - name: Install dependencies
         run: npm install
 
-      # AUTO VERSION BUMP (fixes 1.0.8 repeat issue forever)
-      - name: Bump version
+      - name: Configure git
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          npm version patch -m "auto version bump %s"
+      - name: Bump version
+        run: npm version patch -m "auto version bump %s"
 
-      # PUSH VERSION BACK TO REPO
       - name: Push version bump
-        run: |
-          git push origin main --follow-tags
+        run: git push origin main --follow-tags
 
-      # READ VERSION (FIXED — no broken escaping)
       - name: Read version
         id: version
         run: |
           ver=$(node -p "require('./package.json').version")
           echo "ver=$ver" >> $GITHUB_OUTPUT
 
-      # CREATE GITHUB RELEASE AUTOMATICALLY
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
@@ -56,7 +59,12 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # PUBLISH TO GITHUB PACKAGES
+      - name: Configure npm auth
+        run: |
+          echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> ~/.npmrc
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Publish package
         run: npm publish
         env:

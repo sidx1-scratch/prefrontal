@@ -10,6 +10,12 @@
   "scripts": {
     "start": "npx -y serve ."
   },
+  "files": [
+    "app.js",
+    "src",
+    "index.html",
+    "vendor"
+  ],
   "keywords": [
     "ai",
     "local",

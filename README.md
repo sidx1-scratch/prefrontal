@@ -1,3 +1,9 @@
+
+## Preview
+
+if you want to preview what the app looks like before trying it out go to: https://prefrontal-five.vercel.app/ to see what it looks like.
+
+
 # 🧠 Prefrontal — Local AI Chatbot
 
 ![Node.js](https://img.shields.io/badge/Node.js-v18%2B-brightgreen?logo=node.js)
@@ -340,3 +346,5 @@ Temperature controls how random or creative the AI's outputs are.
 ## 🤝 Contributing
 
 Issues and PRs welcome at [github.com/sidx1-scratch/prefrontal](https://github.com/sidx1-scratch/prefrontal).
+
+

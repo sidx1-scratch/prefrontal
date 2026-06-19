@@ -1,23 +1,36 @@
-
-## Preview
-
-if you want to preview what the app looks like before trying it out go to: https://prefrontal-five.vercel.app/ to see what it looks like.
-
-
 # 🧠 Prefrontal — Local AI Chatbot
 
 ![Node.js](https://img.shields.io/badge/Node.js-v18%2B-brightgreen?logo=node.js)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-blue)
-![License](https://img.shields.io/badge/license-%20%20GNU%20GPLv3%20-green?)
+![License](https://img.shields.io/badge/license-GPLv3-green)
 ![Offline](https://img.shields.io/badge/100%25-Offline-success)
 
-### 100% Offline · No Ads · No API Keys · Your Data Stays on Your Device
+**100% Offline · No Ads · No API Keys Required · Your Data Stays on Your Device**
 
-Prefrontal is an open-source, privacy-first chat interface for local AI models. It works with **Ollama** (desktop) and **Llama.cpp** (any platform including Android via Termux). No cloud, no telemetry, no subscriptions.
+Prefrontal is an open-source, privacy-first chat interface for local AI models. It works with **Ollama** (desktop), **Llama.cpp** (any platform, including Android via Termux), and optionally **OpenRouter** if you'd rather skip local setup entirely. No cloud dependency, no telemetry, no subscriptions.
+
+🔗 **[Live demo](https://prefrontal-five.vercel.app/)** — see what the UI looks like before installing.
+
+---
+
+## Table of Contents
+
+- [Quick Start](#-quick-start)
+- [Installation Options](#-installation-options)
+- [Setting Up Your AI Backend](#-setting-up-your-ai-backend)
+- [Personality Presets](#-personality-presets)
+- [Temperature Control](#️-temperature-control)
+- [Features](#-features)
+- [Keyboard Shortcuts](#️-keyboard-shortcuts)
+- [Troubleshooting](#-troubleshooting)
+- [Contributing](#-contributing)
+- [License](#-license)
 
 ---
 
 ## ⚡ Quick Start
+
+Pick whichever backend matches your needs — cloud convenience or fully offline privacy.
 
 ### 🌐 Easiest: OpenRouter *(no local AI install needed)*
 
@@ -49,7 +62,7 @@ Done — no GPU or model download required.
 ```bash
 # Download Ollama from https://ollama.com, then:
 ollama serve &
-ollama pull gemma4:e2b
+ollama pull gemma3:4b
 ```
 
 **2. Install and run Prefrontal**
@@ -63,37 +76,15 @@ npm install && npm start
 Open `http://localhost:3000`, go to Settings, and set:
 - Runtime → **Ollama**
 - Server URL → `http://localhost:11434`
-- Model → `gemma4:e2b`
+- Model → `gemma3:4b`
 
-> For Android, LAN servers, Llama.cpp, and other options — see the full setup guide below.
+> For Android, LAN servers, Llama.cpp, and other options, see the full setup guide below.
 
 ---
 
 ## 📦 Installation Options
 
-### Option 1: Install via GitHub Packages *(Recommended)*
-
-More setup upfront, but once installed you can run Prefrontal from anywhere on your machine without keeping the source folder around.
-
-**1. Authenticate with GitHub Packages**
-```bash
-npm login --scope=@sidx1-scratch --auth-type=legacy --registry=https://npm.pkg.github.com
-```
-Use your GitHub username and a Personal Access Token from [github.com/settings/tokens](https://github.com/settings/tokens) as the password.
-
-**2. Install globally**
-```bash
-npm install -g @sidx1-scratch/prefrontal
-```
-
-**3. Run from anywhere**
-```bash
-npm explore @sidx1-scratch/prefrontal -- npm start
-```
-
-> To update later: `npm install -g @sidx1-scratch/prefrontal` again.
-
-### Option 2: Clone & Run *(Quickest to get started)*
+### Option 1: Clone & Run *(quickest to get started)*
 
 No authentication needed — just clone and go. Best if you want to poke around the source or just try it out.
 
@@ -106,15 +97,37 @@ npm start
 
 A local web server starts and the app opens automatically at `http://localhost:3000`.
 
+### Option 2: Install via GitHub Packages
+
+More setup upfront, but once installed you can run Prefrontal from anywhere on your machine without keeping the source folder around.
+
+**1. Authenticate with GitHub Packages**
+```bash
+npm login --scope=@sidx1-scratch --auth-type=legacy --registry=https://npm.pkg.github.com
+```
+Use your GitHub username and a [Personal Access Token](https://github.com/settings/tokens) as the password.
+
+**2. Install globally**
+```bash
+npm install -g @sidx1-scratch/prefrontal
+```
+
+**3. Run from anywhere**
+```bash
+npm explore @sidx1-scratch/prefrontal -- npm start
+```
+
+> To update later, run `npm install -g @sidx1-scratch/prefrontal` again.
+
 ---
 
 ## 🧠 Setting Up Your AI Backend
 
 You need **one** of the following backends. Pick whichever suits your setup.
 
-### Option A: OpenRouter *(Easiest — no local install, free models available)*
+### Option A: OpenRouter *(easiest — no local install, free models available)*
 
-OpenRouter is an API that routes to dozens of AI models, many of which are completely free. No GPU or model download required — just an API key.
+OpenRouter is an API that routes to dozens of AI models, many of which are free to use. No GPU or model download required — just an API key.
 
 **1. Create a free account**
 Sign up at [openrouter.ai](https://openrouter.ai) and grab your API key from [openrouter.ai/keys](https://openrouter.ai/keys).
@@ -127,7 +140,7 @@ Sign up at [openrouter.ai](https://openrouter.ai) and grab your API key from [op
 **Recommended free models to start with:**
 
 | Model | ID |
-|-------|----|
+|---|---|
 | Mistral 7B Instruct | `mistralai/mistral-7b-instruct:free` |
 | Llama 3.1 8B | `meta-llama/llama-3.1-8b-instruct:free` |
 | Gemma 3 4B | `google/gemma-3-4b-it:free` |
@@ -136,7 +149,7 @@ Sign up at [openrouter.ai](https://openrouter.ai) and grab your API key from [op
 
 ---
 
-### Option B: Ollama *(Best for fully offline use — Windows, macOS, Linux)*
+### Option B: Ollama *(best for fully offline use — Windows, macOS, Linux)*
 
 **1. Install Ollama**
 Download from [ollama.com](https://ollama.com) and run the installer.
@@ -150,10 +163,10 @@ This starts Ollama on `http://localhost:11434`. Keep this terminal open.
 **3. Pull a model**
 ```bash
 # Recommended — small, fast, great quality:
-ollama pull gemma4:e2b
+ollama pull gemma3:4b
 
 # More capable (needs more RAM):
-ollama pull gemma4
+ollama pull gemma3:12b
 ollama pull llama3.2
 ollama pull mistral
 ```
@@ -162,18 +175,18 @@ ollama pull mistral
 - Open Settings (⚙️ icon or `Ctrl+,`)
 - Runtime → **Ollama**
 - Server URL → `http://localhost:11434`
-- Model → type `gemma4:e2b` or click **Refresh** to pick from installed models
+- Model → type `gemma3:4b` or click **Refresh** to pick from installed models
 
 ---
 
-### Option C: Llama.cpp *(Cross-platform: Windows, macOS, Linux, Android)*
+### Option C: Llama.cpp *(cross-platform — Windows, macOS, Linux, Android)*
 
 Llama.cpp exposes an OpenAI-compatible REST API.
 
 #### 🖥️ Desktop (Windows / macOS / Linux)
 
 **Download a pre-built release:**
-[https://github.com/ggml-org/llama.cpp/releases](https://github.com/ggml-org/llama.cpp/releases)
+[github.com/ggml-org/llama.cpp/releases](https://github.com/ggml-org/llama.cpp/releases)
 
 Or build from source:
 ```bash
@@ -244,7 +257,8 @@ Then open `http://127.0.0.1:3000` in your Android browser.
 
 ---
 
-**External or LAN Servers:**
+### External or LAN Servers
+
 If your AI backend runs on a different machine (home server, another PC), bind it to `0.0.0.0` and enter its LAN IP in Settings — e.g. `http://192.168.1.100:11434` for Ollama or `http://192.168.1.100:8080/v1` for Llama.cpp.
 
 ---
@@ -254,13 +268,13 @@ If your AI backend runs on a different machine (home server, another PC), bind i
 Prefrontal includes **4 built-in personality presets** that change the system prompt and temperature simultaneously. Switch between them on the welcome screen or in Settings.
 
 | Preset | Temp | Best For |
-|--------|------|----------|
-| ⚖️ **Balanced** | 0.7 | General tasks, Q&A, learning |
-| 🎨 **Creative** | 1.1 | Writing, brainstorming, storytelling |
-| 🎯 **Precise** | 0.2 | Facts, summaries, concise answers |
-| 💻 **Developer** | 0.3 | Code review, debugging, technical docs |
+|---|---|---|
+| ⚖️ Balanced | 0.7 | General tasks, Q&A, learning |
+| 🎨 Creative | 1.1 | Writing, brainstorming, storytelling |
+| 🎯 Precise | 0.2 | Facts, summaries, concise answers |
+| 💻 Developer | 0.3 | Code review, debugging, technical docs |
 
-You can also write a fully **Custom** system prompt — edit the System Prompt box in Settings and the preset selector switches to Custom automatically.
+You can also write a fully **custom** system prompt — edit the System Prompt box in Settings, and the preset selector switches to "Custom" automatically.
 
 ---
 
@@ -268,42 +282,42 @@ You can also write a fully **Custom** system prompt — edit the System Prompt b
 
 Temperature controls how random or creative the AI's outputs are.
 
-| Value | Behaviour |
-|-------|-----------|
-| `0.0` | Fully deterministic — same input = same output |
+| Value | Behavior |
+|---|---|
+| `0.0` | Fully deterministic — same input produces the same output |
 | `0.2–0.4` | Precise and focused |
 | `0.7` | Balanced (default) |
 | `1.0–1.2` | Creative and varied |
 | `1.5–2.0` | Wild, experimental, sometimes incoherent |
 
-> **Pro Tip:** Temperature is sent with every message — just adjust the slider, save, and it applies to the next generation. No restart needed.
+> **Pro tip:** Temperature is sent with every message — just adjust the slider, save, and it applies to the next generation. No restart needed.
 
 ---
 
 ## 🎨 Features
 
 | Feature | Details |
-|---------|---------|
-| 💬 **Chat** | Full conversation history with any local AI model |
-| 🔄 **Streaming** | Real-time token-by-token generation |
-| 🎭 **Personality Presets** | 4 built-in modes with one click |
-| 🌡️ **Temperature Control** | Live-sent with every request |
-| 📚 **Multi-Backend** | OpenRouter (cloud), Ollama, and Llama.cpp over local or LAN |
-| 🌐 **LAN & External** | Connect to dedicated AI servers on your network |
-| 💾 **Multi-Chat** | Unlimited saved local conversations |
-| 🔍 **Search** | Instant conversation search |
-| 📱 **PWA & Mobile Ready** | Install as an app on iOS/Android; safe-area aware |
-| 🎨 **Refined UI** | 4 themes: Dark, Midnight, Emerald, Light |
-| 🧑 **Local Profile** | Device identity stored locally — no accounts |
-| 📤 **Export** | Export chats as Markdown, profile as JSON |
-| 🔒 **100% Private** | Zero network calls except to your own model server |
+|---|---|
+| 💬 Chat | Full conversation history with any local AI model |
+| 🔄 Streaming | Real-time, token-by-token generation |
+| 🎭 Personality Presets | 4 built-in modes with one click |
+| 🌡️ Temperature Control | Live-sent with every request |
+| 📚 Multi-Backend | OpenRouter (cloud), Ollama, and Llama.cpp over local or LAN |
+| 🌐 LAN & External | Connect to dedicated AI servers on your network |
+| 💾 Multi-Chat | Unlimited saved local conversations |
+| 🔍 Search | Instant conversation search |
+| 📱 PWA & Mobile Ready | Install as an app on iOS/Android; safe-area aware |
+| 🎨 Refined UI | 4 themes: Dark, Midnight, Emerald, Light |
+| 🧑 Local Profile | Device identity stored locally — no accounts |
+| 📤 Export | Export chats as Markdown, profile as JSON |
+| 🔒 100% Private | Zero network calls except to your own model server |
 
 ---
 
 ## ⌨️ Keyboard Shortcuts
 
 | Shortcut | Action |
-|----------|--------|
+|---|---|
 | `Ctrl + N` | New conversation |
 | `Ctrl + ,` | Open Settings |
 | `Enter` | Send message *(configurable)* |
@@ -315,36 +329,40 @@ Temperature controls how random or creative the AI's outputs are.
 ## 🔧 Troubleshooting
 
 ### ❌ "Cannot connect to server"
-- Make sure your AI backend is **running** before opening Prefrontal
-- Ollama: run `ollama serve` in a terminal
-- Llama.cpp: confirm `llama-server` is running with the correct port
-- Verify Settings → **Server URL** matches your backend exactly (including `/v1` for Llama.cpp)
-- On Android, use `http://127.0.0.1` — `localhost` may not resolve correctly
+- Make sure your AI backend is **running** before opening Prefrontal.
+- Ollama: run `ollama serve` in a terminal.
+- Llama.cpp: confirm `llama-server` is running with the correct port.
+- Verify Settings → **Server URL** matches your backend exactly (including `/v1` for Llama.cpp).
+- On Android, use `http://127.0.0.1` — `localhost` may not resolve correctly.
 
 ### ❌ "Model not found"
-- **Ollama**: run `ollama list` to see installed models; copy the exact name including tag
-- **Llama.cpp**: the model name is the `.gguf` filename you passed to `llama-server` with `-m`
-- Click **Refresh** in Settings to auto-populate the model list
+- **Ollama**: run `ollama list` to see installed models; copy the exact name including its tag.
+- **Llama.cpp**: the model name is the `.gguf` filename you passed to `llama-server` with `-m`.
+- Click **Refresh** in Settings to auto-populate the model list.
 
 ### ❌ Streaming stops or output is garbled
-- Lower the **Context Window** setting — the model may be running out of memory
-- Try a smaller model (e.g. `gemma4:e2b` instead of `gemma4`)
-- Restart the backend server and try again
+- Lower the **Context Window** setting — the model may be running out of memory.
+- Try a smaller model (e.g. `gemma3:4b` instead of `gemma3:12b`).
+- Restart the backend server and try again.
 
 ### ❌ Temperature changes have no effect
-- Temperature applies to the **next message** only — not retroactively
-- Make sure you click **Save Settings** after adjusting the slider
-- Some models enforce a minimum temperature internally; very low values may behave like `0.0`
+- Temperature applies to the **next message** only — not retroactively.
+- Make sure you click **Save Settings** after adjusting the slider.
+- Some models enforce a minimum temperature internally; very low values may behave like `0.0`.
 
 ### ❌ App opens but is blank
-- Confirm you ran `npm start`, not `npm run build`
-- Try `npx serve .` as an alternative server
-- Open the browser console (`F12`) and check for errors
+- Confirm you ran `npm start`, not `npm run build`.
+- Try `npx serve .` as an alternative server.
+- Open the browser console (`F12`) and check for errors.
 
 ---
 
 ## 🤝 Contributing
 
-Issues and PRs welcome at [github.com/sidx1-scratch/prefrontal](https://github.com/sidx1-scratch/prefrontal).
+Issues and PRs are welcome at [github.com/sidx1-scratch/prefrontal](https://github.com/sidx1-scratch/prefrontal). If you spot a bug or have a feature idea, open an issue before submitting a large PR so the approach can be discussed first.
 
+---
 
+## 📄 License
+
+Prefrontal is released under the [GNU GPLv3](https://www.gnu.org/licenses/gpl-3.0.html) license.

@@ -11,10 +11,14 @@ Prefrontal is an open-source, privacy-first chat interface for local AI models. 
 
 🔗 **[Live demo](https://prefrontal-five.vercel.app/)** — see what the UI looks like before installing.
 
+> [!NOTE]
+> The hosted live demo only supports the OpenRouter runtime (it can't reach a local Ollama or Llama.cpp server from the web). It also stores your API key in a browser cookie, so opening the demo in a private/incognito window will prompt you to set one up again. Run Prefrontal locally if you want the full privacy picture — see [Privacy & Data](#-privacy--data).
+
 ---
 
 ## Table of Contents
 
+- [Requirements](#-requirements)
 - [Quick Start](#-quick-start)
 - [Installation Options](#-installation-options)
 - [Setting Up Your AI Backend](#-setting-up-your-ai-backend)
@@ -22,15 +26,27 @@ Prefrontal is an open-source, privacy-first chat interface for local AI models. 
 - [Temperature Control](#️-temperature-control)
 - [Features](#-features)
 - [Keyboard Shortcuts](#️-keyboard-shortcuts)
+- [Privacy & Data](#-privacy--data)
 - [Troubleshooting](#-troubleshooting)
 - [Contributing](#-contributing)
 - [License](#-license)
 
 ---
 
+## ✅ Requirements
+
+- **Node.js v18+** and **npm** — to run the Prefrontal server itself
+- **Git** — to clone the repo
+- One AI backend, set up below:
+  - An [OpenRouter](https://openrouter.ai) account (free, no install), **or**
+  - [Ollama](https://ollama.com) installed locally, **or**
+  - A [Llama.cpp](https://github.com/ggml-org/llama.cpp) server you've built or downloaded
+
+---
+
 ## ⚡ Quick Start
 
-Pick whichever backend matches your needs — cloud convenience or fully offline privacy.
+Pick whichever backend matches your needs — cloud convenience or fully offline privacy. (Want Llama.cpp or Android instead? Jump to [Setting Up Your AI Backend](#-setting-up-your-ai-backend).)
 
 ### 🌐 Easiest: OpenRouter *(no local AI install needed)*
 
@@ -78,8 +94,6 @@ Open `http://localhost:3000`, go to Settings, and set:
 - Server URL → `http://localhost:11434`
 - Model → `gemma3:4b`
 
-> For Android, LAN servers, Llama.cpp, and other options, see the full setup guide below.
-
 ---
 
 ## 📦 Installation Options
@@ -117,7 +131,8 @@ npm install -g @sidx1-scratch/prefrontal
 npm explore @sidx1-scratch/prefrontal -- npm start
 ```
 
-> To update later, run `npm install -g @sidx1-scratch/prefrontal` again.
+> [!TIP]
+> To update later, just run `npm install -g @sidx1-scratch/prefrontal` again.
 
 ---
 
@@ -145,7 +160,8 @@ Sign up at [openrouter.ai](https://openrouter.ai) and grab your API key from [op
 | Llama 3.2 3B | `meta-llama/llama-3.2-3b-instruct:free` |
 | Gemma 4 31B | `google/gemma-4-31b-it:free` |
 
-> Free models may have rate limits. Check [openrouter.ai/models?q=free](https://openrouter.ai/models?q=free) for the current free tier.
+> [!NOTE]
+> Free model IDs and rate limits change as providers rotate promotions. If one of the IDs above 404s, check the current list at [openrouter.ai/models?q=free](https://openrouter.ai/models?q=free).
 
 ---
 
@@ -188,24 +204,27 @@ Llama.cpp exposes an OpenAI-compatible REST API.
 **Download a pre-built release:**
 [github.com/ggml-org/llama.cpp/releases](https://github.com/ggml-org/llama.cpp/releases)
 
-Or build from source:
+**Or build from source:**
 ```bash
-git clone https://github.com/ggerganov/llama.cpp
+git clone https://github.com/ggml-org/llama.cpp
 cd llama.cpp
-mkdir build && cd build
-cmake .. -DLLAMA_BLAS=ON   # optional: add GPU flags
-cmake --build . --config Release
+cmake -B build -DGGML_BLAS=ON   # optional: swap in a GPU flag, e.g. -DGGML_CUDA=ON
+cmake --build build --config Release
 ```
 
-**Start the server:**
+**Start the server** (run from the `llama.cpp` folder):
 ```bash
-./llama-server -m models/your_model.gguf --port 8080 --host 0.0.0.0 -c 8192
+# Option 1: auto-download a model from Hugging Face by name
+./build/bin/llama-server -hf ggml-org/gemma-3-4b-it-GGUF --port 8080 --host 0.0.0.0 -c 8192
+
+# Option 2: point -m at a .gguf file you already have
+./build/bin/llama-server -m models/your_model.gguf --port 8080 --host 0.0.0.0 -c 8192
 ```
 
 **Configure Prefrontal:**
 - Runtime → **Llama.cpp / OpenAI**
 - Server URL → `http://localhost:8080/v1`
-- Model → enter the exact filename of your `.gguf` model (e.g. `gemma-2-2b.gguf`)
+- Model → the model name/filename you started the server with (e.g. `gemma-3-4b-it-GGUF` or `gemma-2-2b.gguf`)
 
 ---
 
@@ -217,33 +236,27 @@ Get it from [F-Droid](https://f-droid.org/en/packages/com.termux/) — not the P
 **2. Install dependencies**
 ```bash
 pkg update && pkg upgrade
-pkg install clang wget git cmake make python3
+pkg install clang git cmake make python3 libcurl
 ```
 
 **3. Build Llama.cpp**
 ```bash
-git clone https://github.com/ggerganov/llama.cpp
+git clone https://github.com/ggml-org/llama.cpp
 cd llama.cpp
-mkdir build && cd build
-cmake .. -DCMAKE_BUILD_TYPE=Release
-make -j4
+cmake -B build
+cmake --build build --config Release -j4
 ```
 
-**4. Download a model**
-Use a small GGUF model (2–4 GB recommended for mobile):
+**4. Start the server** (auto-downloads a small model on first run)
 ```bash
-mkdir -p ../models
-# Example: TinyLlama 1.1B Q4 — good balance of size and quality for mobile
-wget -P ../models https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf
-```
-
-**5. Start the server**
-```bash
-./bin/llama-server -m ../models/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf \
+./build/bin/llama-server -hf ggml-org/gemma-3-1b-it-GGUF \
   --port 8080 --host 0.0.0.0 -c 4096
 ```
 
-**6. Open Prefrontal**
+> [!TIP]
+> Prefer to manage the file yourself instead of auto-downloading? Grab any compact GGUF model — something in the 1–4B parameter range, quantized to Q4, fits comfortably on most phones — and pass it with `-m path/to/model.gguf` instead of `-hf`.
+
+**5. Open Prefrontal**
 In a second Termux session, start the Node.js server:
 ```bash
 cd prefrontal && npm start
@@ -290,7 +303,8 @@ Temperature controls how random or creative the AI's outputs are.
 | `1.0–1.2` | Creative and varied |
 | `1.5–2.0` | Wild, experimental, sometimes incoherent |
 
-> **Pro tip:** Temperature is sent with every message — just adjust the slider, save, and it applies to the next generation. No restart needed.
+> [!TIP]
+> Temperature is sent with every message — just adjust the slider, save, and it applies to the next generation. No restart needed.
 
 ---
 
@@ -326,6 +340,17 @@ Temperature controls how random or creative the AI's outputs are.
 
 ---
 
+## 🔐 Privacy & Data
+
+Running Prefrontal locally (Ollama or Llama.cpp), no chat data or API keys leave your machine — the app makes network calls only to the model server you configured, which is also on your machine or LAN.
+
+If you use the **OpenRouter** runtime instead, your messages are sent to OpenRouter's API to be routed to whichever model you picked, so at that point you're trusting OpenRouter and the model provider with your prompts — the same as using any other cloud AI service.
+
+> [!WARNING]
+> The hosted [live demo](https://prefrontal-five.vercel.app/) is a special case: it only works with OpenRouter, and it stores your API key in a browser cookie rather than anywhere on a device you control. Treat it as a way to preview the UI, not as your daily driver — for real use, run Prefrontal locally.
+
+---
+
 ## 🔧 Troubleshooting
 
 ### ❌ "Cannot connect to server"
@@ -337,7 +362,7 @@ Temperature controls how random or creative the AI's outputs are.
 
 ### ❌ "Model not found"
 - **Ollama**: run `ollama list` to see installed models; copy the exact name including its tag.
-- **Llama.cpp**: the model name is the `.gguf` filename you passed to `llama-server` with `-m`.
+- **Llama.cpp**: the model name is the `.gguf` filename (or `-hf` repo name) you passed to `llama-server`.
 - Click **Refresh** in Settings to auto-populate the model list.
 
 ### ❌ Streaming stops or output is garbled

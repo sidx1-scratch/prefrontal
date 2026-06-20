@@ -27,5 +27,8 @@
     "chatbot"
   ],
   "author": "sidx1-scratch",
-  "license": "GPL-3.0"
+  "license": "GPL-3.0",
+  "dependencies": {
+    "@vercel/speed-insights": "^2.0.0"
+  }
 }

@@ -558,6 +558,11 @@
   <script src="vendor/marked.min.js"></script>
   <script src="vendor/highlight.min.js"></script>
   <script src="app.js"></script>
+  <script type="module">
+    // Initialize Vercel Speed Insights
+    import { injectSpeedInsights } from './node_modules/@vercel/speed-insights/dist/index.mjs';
+    injectSpeedInsights();
+  </script>
 </body>
 
 </html>

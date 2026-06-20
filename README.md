@@ -1,3 +1,16 @@
+<img width="1310" height="667" alt="image" src="https://github.com/user-attachments/assets/ae27f737-5ffe-463c-8c1e-181c3402ae51" />
+<img width="1310" height="667" alt="image" src="https://github.com/user-attachments/assets/7674e626-04ec-4c4f-b4ce-62d95942fce5" />
+<img width="1310" height="667" alt="image" src="https://github.com/user-attachments/assets/97c5a9c4-de20-4e0d-856d-cfc68777dde1" />
+<img width="1310" height="667" alt="image" src="https://github.com/user-attachments/assets/0049b79a-403d-4b7a-a1f1-55272cb81a51" />
+<img width="1310" height="667" alt="image" src="https://github.com/user-attachments/assets/bccefeb3-2498-4262-9960-b0849075fe32" />
+<img width="1310" height="667" alt="image" src="https://github.com/user-attachments/assets/dd1eeaf0-af56-455c-b4f7-26bfe1c05730" />
+
+
+
+
+
+
+
 # 🧠 Prefrontal — Local AI Chatbot
 
 ![Node.js](https://img.shields.io/badge/Node.js-v18%2B-brightgreen?logo=node.js)

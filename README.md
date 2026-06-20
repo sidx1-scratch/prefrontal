@@ -399,6 +399,11 @@ If you use the **OpenRouter** runtime instead, your messages are sent to OpenRou
 ## 🤝 Contributing
 
 Issues and PRs are welcome at [github.com/sidx1-scratch/prefrontal](https://github.com/sidx1-scratch/prefrontal). If you spot a bug or have a feature idea, open an issue before submitting a large PR so the approach can be discussed first.
+### Contribution Rule:  
+Prefrontal is a zero‑build, zero‑dependency project.
+You’re welcome to contribute, but all changes must keep the app lightweight and fully runnable as plain HTML/CSS/JS.
+No TypeScript, no frameworks, no bundlers, no compilation — ever.  
+The project must remain simple enough that anyone can open the folder and understand it.
 
 ---
 

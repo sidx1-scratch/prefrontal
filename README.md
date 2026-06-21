@@ -1,19 +1,21 @@
-<details open>
-<summary><b>📸 Screenshots</b> <i>(click to collapse)</i></summary>
-<br>
+<p align="center">
 
 <table>
 <tr>
-<td><img width="230" alt="Prefrontal screenshot 1" src="https://github.com/user-attachments/assets/ae27f737-5ffe-463c-8c1e-181c3402ae51" /></td>
-<td><img width="230" alt="Prefrontal screenshot 2" src="https://github.com/user-attachments/assets/7674e626-04ec-4c4f-b4ce-62d95942fce5" /></td>
-<td><img width="230" alt="Prefrontal screenshot 3" src="https://github.com/user-attachments/assets/97c5a9c4-de20-4e0d-856d-cfc68777dde1" /></td>
-<td><img width="230" alt="Prefrontal screenshot 4" src="https://github.com/user-attachments/assets/0049b79a-403d-4b7a-a1f1-55272cb81a51" /></td>
-<td><img width="230" alt="Prefrontal screenshot 5" src="https://github.com/user-attachments/assets/bccefeb3-2498-4262-9960-b0849075fe32" /></td>
-<td><img width="230" alt="Prefrontal screenshot 6" src="https://github.com/user-attachments/assets/dd1eeaf0-af56-455c-b4f7-26bfe1c05730" /></td>
+<td><img width="420" alt="Prefrontal screenshot 1" src="https://github.com/user-attachments/assets/ae27f737-5ffe-463c-8c1e-181c3402ae51" /></td>
+<td><img width="420" alt="Prefrontal screenshot 2" src="https://github.com/user-attachments/assets/7674e626-04ec-4c4f-b4ce-62d95942fce5" /></td>
+<td><img width="420" alt="Prefrontal screenshot 3" src="https://github.com/user-attachments/assets/97c5a9c4-de20-4e0d-856d-cfc68777dde1" /></td>
+</tr>
+<tr>
+<td><img width="420" alt="Prefrontal screenshot 4" src="https://github.com/user-attachments/assets/0049b79a-403d-4b7a-a1f1-55272cb81a51" /></td>
+<td><img width="420" alt="Prefrontal screenshot 5" src="https://github.com/user-attachments/assets/bccefeb3-2498-4262-9960-b0849075fe32" /></td>
+<td><img width="420" alt="Prefrontal screenshot 6" src="https://github.com/user-attachments/assets/dd1eeaf0-af56-455c-b4f7-26bfe1c05730" /></td>
 </tr>
 </table>
 
-</details>
+<sub>↔️ scroll sideways if a row overflows your screen</sub>
+
+</p>
 
 # 🧠 Prefrontal — Local AI Chatbot
 

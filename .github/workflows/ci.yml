@@ -1,0 +1,69 @@
+name: Prefrontal CI Tests
+
+on:
+  workflow_run:
+    workflows: ["Auto Release + GitHub Packages"]
+    types: [completed]
+
+jobs:
+  test:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # -----------------------
+      # INSTALL APP
+      # -----------------------
+      - name: Install dependencies
+        run: npm install
+
+      # -----------------------
+      # OLLAMA
+      # -----------------------
+      - name: Install Ollama (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: curl -fsSL https://ollama.com/install.sh | sh
+
+      - name: Install Ollama (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: irm https://ollama.com/install.ps1 | iex
+
+      - name: Start Ollama
+        shell: bash
+        run: |
+          ollama serve &
+          sleep 10
+
+      - name: Pull model
+        run: ollama pull llama3.2:1b
+
+      # -----------------------
+      # START APP
+      # -----------------------
+      - name: Start Prefrontal
+        shell: bash
+        run: |
+          npm start &
+          sleep 5
+
+      # -----------------------
+      # RUN TESTS
+      # -----------------------
+      - name: Run CI tests
+        shell: bash
+        run: node tests/ci-smoke.js

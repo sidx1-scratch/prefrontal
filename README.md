@@ -212,12 +212,13 @@ Sign up at [openrouter.ai](https://openrouter.ai) and grab your API key from [op
 
 | Model | ID |
 |---|---|
-| Mistral 7B Instruct | `mistralai/mistral-7b-instruct:free` |  ( this exact mistral model is hard to find so use this link: https://openrouter.ai/mistralai/mistral-7b-instruct:free)
+| Mistral 7B Instruct | `mistralai/mistral-7b-instruct:free` |  
 | Llama 3.2 3B | `meta-llama/llama-3.2-3b-instruct:free` |
 | Gemma 4 31B | `google/gemma-4-31b-it:free` |
 
 > [!NOTE]
-> Free model IDs and rate limits change as providers rotate promotions. If one of the IDs above 404s, check the current list at [openrouter.ai/models?q=free](https://openrouter.ai/models?q=free).
+> Free model IDs and rate limits change as providers rotate promotions. If one of the IDs above 404s, check the current list at [openrouter.ai/models?q=free](https://openrouter.ai/models?q=free). Also the mistral model recommended is hard to find so use this link: [Mistral 7B Instruct Free](https://openrouter.ai/mistralai/mistral-7b-instruct:free)
+
 
 ---
 

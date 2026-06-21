@@ -1,8 +1,8 @@
-name: Prefrontal CI (Stable Production)
+name: Prefrontal CI (Stable + macOS Fixed)
 
 on:
-  repository_dispatch:
-    types: [prefrontal-tests]
+  push:
+    branches: [main]
 
 jobs:
   test:
@@ -13,6 +13,8 @@ jobs:
 
     runs-on: ${{ matrix.os }}
 
+    timeout-minutes: 40
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -22,14 +24,11 @@ jobs:
         with:
           node-version: 20
 
-      # =========================================================
-      # INSTALL DEPENDENCIES
-      # =========================================================
       - name: Install dependencies
         run: npm install
 
       # =========================================================
-      # OLLAMA INSTALL (FIXED PER OS)
+      # OLLAMA INSTALL (ALL OS FIXED)
       # =========================================================
 
       - name: Install Ollama (Linux)
@@ -38,7 +37,9 @@ jobs:
 
       - name: Install Ollama (macOS)
         if: runner.os == 'macOS'
-        run: brew install ollama
+        run: |
+          brew install ollama
+          ollama --version
 
       - name: Install Ollama (Windows)
         if: runner.os == 'Windows'
@@ -48,143 +49,78 @@ jobs:
       - name: Fix Windows PATH
         if: runner.os == 'Windows'
         shell: powershell
+        run: echo "$env:LOCALAPPDATA\Programs\Ollama" >> $env:GITHUB_PATH
+
+      # =========================================================
+      # START OLLAMA (MAC SAFE START)
+      # =========================================================
+
+      - name: Start Ollama
+        shell: bash
         run: |
-          echo "$env:LOCALAPPDATA\Programs\Ollama" >> $env:GITHUB_PATH
-
-      - name: Verify Ollama
-        shell: bash
-        run: ollama --version || true
-
-      - name: Start Ollama server
-        shell: bash
-        run: ollama serve &
+          nohup ollama serve > ollama.log 2>&1 &
 
       # =========================================================
-      # WAIT FOR OLLAMA (NO SLEEP)
+      # WAIT FOR API (NO RACE CONDITIONS)
       # =========================================================
+
       - name: Wait for Ollama API
         shell: bash
         run: |
           node -e "
           const http=require('http');
-          const check=()=>http.get('http://localhost:11434/api/tags',res=>process.exit(0))
-            .on('error',()=>setTimeout(check,1000));
+
+          function check(){
+            http.get('http://localhost:11434/api/tags',res=>{
+              let d='';
+              res.on('data',x=>d+=x);
+              res.on('end',()=>{
+                try{
+                  JSON.parse(d);
+                  process.exit(0);
+                }catch(e){
+                  setTimeout(check,1500);
+                }
+              });
+            }).on('error',()=>setTimeout(check,1500));
+          }
+
           check();
           "
+      
+      # =========================================================
+      # CRITICAL FIX: MACOS COLD START
+      # =========================================================
+
+      - name: Warm up model (fix empty response bug)
+        run: ollama run llama3.2:1b "warmup"
 
       - name: Pull model
         run: ollama pull llama3.2:1b
 
       # =========================================================
-      # SAFE llama.cpp (NO OOM CRASH)
+      # START APP
       # =========================================================
 
-      - name: Clone llama.cpp
-        run: git clone https://github.com/ggerganov/llama.cpp.git
-
-      - name: Configure llama.cpp (NO BUILD on Linux-heavy)
-        run: |
-          cd llama.cpp
-          cmake -B build
-
-      - name: Build llama.cpp (safe Linux)
-        if: runner.os != 'Linux'
-        run: |
-          cd llama.cpp
-          cmake --build build -j 2
-
-      # Linux ONLY: avoid OOM crash
-      - name: Build llama.cpp (Linux minimal safe build)
-        if: runner.os == 'Linux'
-        run: |
-          cd llama.cpp
-          cmake --build build -j 1
-
-      # =========================================================
-      # START YOUR APP
-      # =========================================================
-      - name: Start Prefrontal
-        shell: bash
+      - name: Start app
         run: npm start &
 
       - name: Wait for frontend
-        shell: bash
         run: |
           node -e "
           const http=require('http');
-          const check=()=>http.get('http://localhost:3000',res=>process.exit(0))
-            .on('error',()=>setTimeout(check,1000));
+
+          function check(){
+            http.get('http://localhost:3000',res=>process.exit(0))
+              .on('error',()=>setTimeout(check,1000));
+          }
+
           check();
           "
 
       # =========================================================
-      # REAL AI TESTS
+      # RUN SMOKE TEST
       # =========================================================
-      - name: Run AI tests
-        shell: bash
-        run: |
-          node -e "
-          const http=require('http');
 
-          function fail(stage,e){
-            console.error('\n❌ ['+stage+' FAILED]');
-            console.error(e);
-            process.exit(1);
-          }
-
-          function ollama(prompt){
-            return new Promise((resolve,reject)=>{
-              const data=JSON.stringify({
-                model:'llama3.2:1b',
-                prompt,
-                stream:false
-              });
-
-              const req=http.request({
-                hostname:'localhost',
-                port:11434,
-                path:'/api/generate',
-                method:'POST',
-                headers:{
-                  'Content-Type':'application/json',
-                  'Content-Length':data.length
-                }
-              },res=>{
-                let body='';
-                res.on('data',d=>body+=d);
-                res.on('end',()=>{
-                  try{
-                    const j=JSON.parse(body);
-                    resolve(j.response||'');
-                  }catch(e){
-                    reject(body);
-                  }
-                });
-              });
-
-              req.on('error',reject);
-              req.write(data);
-              req.end();
-            });
-          }
-
-          (async()=>{
-            try{
-              console.log('Single-turn test...');
-              const r1=await ollama('say hello in one word');
-              if(!r1) throw new Error('empty response');
-
-              console.log('Multi-turn test...');
-              const r2=await ollama('remember YES. is it YES?');
-              const r3=await ollama('repeat last answer');
-
-              if(!r2||!r3) throw new Error('multi-turn failed');
-
-              console.log('\n🎉 ALL TESTS PASSED');
-              console.log({r1,r2,r3});
-
-            }catch(e){
-              fail('CI TEST SUITE',e);
-            }
-          })();
-          "
+      - name: Run CI smoke test
+        run: node tests/ci-smoke.js

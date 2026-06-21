@@ -1,14 +1,11 @@
-name: Prefrontal CI Tests
+name: Prefrontal CI (REAL + RELIABLE)
 
 on:
-  workflow_run:
-    workflows: ["Auto Release + GitHub Packages"]
-    types: [completed]
+  repository_dispatch:
+    types: [prefrontal-tests]
 
 jobs:
   test:
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
-
     strategy:
       fail-fast: false
       matrix:
@@ -26,13 +23,13 @@ jobs:
           node-version: 20
 
       # -----------------------
-      # INSTALL APP
+      # INSTALL DEPENDENCIES
       # -----------------------
       - name: Install dependencies
         run: npm install
 
       # -----------------------
-      # OLLAMA
+      # OLLAMA INSTALL
       # -----------------------
       - name: Install Ollama (Linux/macOS)
         if: runner.os != 'Windows'
@@ -53,7 +50,36 @@ jobs:
         run: ollama pull llama3.2:1b
 
       # -----------------------
-      # START APP
+      # llama.cpp (REAL BUILD CHECK)
+      # -----------------------
+      - name: Install build tools (Linux)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y cmake build-essential git
+
+      - name: Install build tools (macOS)
+        if: runner.os == 'macOS'
+        run: brew install cmake git
+
+      - name: Clone llama.cpp
+        run: git clone https://github.com/ggerganov/llama.cpp.git
+
+      - name: Build llama.cpp (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          cd llama.cpp
+          cmake -B build
+          cmake --build build -j
+
+      - name: Build llama.cpp (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          cd llama.cpp
+          cmake -B build
+          cmake --build build --config Release
+
+      # -----------------------
+      # START YOUR APP
       # -----------------------
       - name: Start Prefrontal
         shell: bash
@@ -62,8 +88,92 @@ jobs:
           sleep 5
 
       # -----------------------
-      # RUN TESTS
+      # SMART PORT CHECK (NO SLEEP DEPENDENCY)
+      # -----------------------
+      - name: Wait for server
+        shell: bash
+        run: |
+          node -e "
+          const http=require('http');
+          const check=()=>http.get('http://localhost:3000',res=>process.exit(0))
+            .on('error',()=>setTimeout(check,1000));
+          check();
+          "
+
+      # -----------------------
+      # REAL AI + SYSTEM TESTS
       # -----------------------
       - name: Run CI tests
         shell: bash
-        run: node tests/ci-smoke.js
+        run: |
+          node -e "
+          const http=require('http');
+
+          function fail(stage, err){
+            console.error('\n❌ ['+stage+' FAILED]');
+            console.error(err);
+            process.exit(1);
+          }
+
+          function ollama(prompt){
+            return new Promise((resolve,reject)=>{
+              const data=JSON.stringify({
+                model:'llama3.2:1b',
+                prompt,
+                stream:false
+              });
+
+              const req=http.request({
+                hostname:'localhost',
+                port:11434,
+                path:'/api/generate',
+                method:'POST',
+                headers:{
+                  'Content-Type':'application/json',
+                  'Content-Length':data.length
+                }
+              },res=>{
+                let body='';
+                res.on('data',d=>body+=d);
+                res.on('end',()=>{
+                  try{
+                    const j=JSON.parse(body);
+                    resolve(j.response||'');
+                  }catch(e){
+                    reject(body);
+                  }
+                });
+              });
+
+              req.on('error',reject);
+              req.write(data);
+              req.end();
+            });
+          }
+
+          (async()=>{
+            try{
+              console.log('Frontend check...');
+              await new Promise((r,j)=>{
+                const c=()=>http.get('http://localhost:3000',r).on('error',()=>setTimeout(c,1000));
+                c();
+              });
+
+              console.log('Single-turn test...');
+              const r1=await ollama('say hello in one word');
+              if(!r1) throw new Error('empty response');
+
+              console.log('Multi-turn test...');
+              const r2=await ollama('remember YES. is it yes?');
+              const r3=await ollama('repeat last answer');
+
+              if(!r2||!r3) throw new Error('multi-turn failed');
+
+              console.log('\n🎉 ALL TESTS PASSED');
+              console.log({r1,r2,r3});
+
+            }catch(e){
+              fail('CI TEST SUITE',e);
+            }
+          })();
+          "

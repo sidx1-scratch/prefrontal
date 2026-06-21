@@ -1,21 +1,25 @@
-## screenshots of prefrontal
-<img width="1310" height="667" alt="image" src="https://github.com/user-attachments/assets/ae27f737-5ffe-463c-8c1e-181c3402ae51" />
-<img width="1310" height="667" alt="image" src="https://github.com/user-attachments/assets/7674e626-04ec-4c4f-b4ce-62d95942fce5" />
-<img width="1310" height="667" alt="image" src="https://github.com/user-attachments/assets/97c5a9c4-de20-4e0d-856d-cfc68777dde1" />
-<img width="1310" height="667" alt="image" src="https://github.com/user-attachments/assets/0049b79a-403d-4b7a-a1f1-55272cb81a51" />
-<img width="1310" height="667" alt="image" src="https://github.com/user-attachments/assets/bccefeb3-2498-4262-9960-b0849075fe32" />
-<img width="1310" height="667" alt="image" src="https://github.com/user-attachments/assets/dd1eeaf0-af56-455c-b4f7-26bfe1c05730" />
+<details open>
+<summary><b>📸 Screenshots</b> <i>(click to collapse)</i></summary>
+<br>
 
+<table>
+<tr>
+<td><img width="230" alt="Prefrontal screenshot 1" src="https://github.com/user-attachments/assets/ae27f737-5ffe-463c-8c1e-181c3402ae51" /></td>
+<td><img width="230" alt="Prefrontal screenshot 2" src="https://github.com/user-attachments/assets/7674e626-04ec-4c4f-b4ce-62d95942fce5" /></td>
+<td><img width="230" alt="Prefrontal screenshot 3" src="https://github.com/user-attachments/assets/97c5a9c4-de20-4e0d-856d-cfc68777dde1" /></td>
+<td><img width="230" alt="Prefrontal screenshot 4" src="https://github.com/user-attachments/assets/0049b79a-403d-4b7a-a1f1-55272cb81a51" /></td>
+<td><img width="230" alt="Prefrontal screenshot 5" src="https://github.com/user-attachments/assets/bccefeb3-2498-4262-9960-b0849075fe32" /></td>
+<td><img width="230" alt="Prefrontal screenshot 6" src="https://github.com/user-attachments/assets/dd1eeaf0-af56-455c-b4f7-26bfe1c05730" /></td>
+</tr>
+</table>
 
-
-
-
-
+</details>
 
 # 🧠 Prefrontal — Local AI Chatbot
 
 ![Node.js](https://img.shields.io/badge/Node.js-v18%2B-brightgreen?logo=node.js)
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-blue)
+![Release](https://img.shields.io/github/v/release/sidx1-scratch/prefrontal?label=latest%20release)
 ![License](https://img.shields.io/badge/license-GPLv3-green)
 ![Offline](https://img.shields.io/badge/100%25-Offline-success)
 
@@ -50,7 +54,7 @@ Prefrontal is an open-source, privacy-first chat interface for local AI models. 
 ## ✅ Requirements
 
 - **Node.js v18+** and **npm** — to run the Prefrontal server itself
-- **Git** — to clone the repo
+- **Git** — only if you choose the Clone & Run or GitHub Packages install method below; the Release download method needs no git at all
 - One AI backend, set up below:
   - An [OpenRouter](https://openrouter.ai) account (free, no install), **or**
   - [Ollama](https://ollama.com) installed locally, **or**
@@ -61,6 +65,9 @@ Prefrontal is an open-source, privacy-first chat interface for local AI models. 
 ## ⚡ Quick Start
 
 Pick whichever backend matches your needs — cloud convenience or fully offline privacy. (Want Llama.cpp or Android instead? Jump to [Setting Up Your AI Backend](#-setting-up-your-ai-backend).)
+
+> [!TIP]
+> Don't want to install git? Skip the `git clone` step below and use [Download a Release](#option-1-download-a-release-no-git-required) instead — everything else is identical.
 
 ### 🌐 Easiest: OpenRouter *(no local AI install needed)*
 
@@ -112,9 +119,39 @@ Open `http://localhost:3000`, go to Settings, and set:
 
 ## 📦 Installation Options
 
-### Option 1: Clone & Run *(quickest to get started)*
+Three ways to get Prefrontal running locally — pick whichever fits how you work.
 
-No authentication needed — just clone and go. Best if you want to poke around the source or just try it out.
+| Method | Best if you... | Git needed? |
+|---|---|---|
+| 📥 **Download a Release** | don't want to install or touch git at all | ❌ No |
+| 🧬 **Clone & Run** | are comfortable with git and want to stay on the latest commit | ✅ Yes |
+| 🌍 **GitHub Packages** | want to install once and run from anywhere without keeping a source folder around | ✅ Yes (login only) |
+
+### Option 1: Download a Release *(no Git required)*
+
+If you don't want to mess around with git, you don't have to — every release ships with a ready-made source archive you can just download.
+
+**1. Grab the latest release**
+Open the [Releases page](https://github.com/sidx1-scratch/prefrontal/releases/latest) and, under **Assets**, download `Source code (zip)` (Windows/macOS) or `Source code (tar.gz)` (Linux/macOS).
+
+**2. Extract it**
+Unzip the archive anywhere you like — Desktop, Documents, wherever's convenient.
+
+**3. Install and run**
+Open a terminal inside the extracted folder — on Windows, Shift + Right-click the folder and choose "Open in Terminal" or "Open PowerShell window here" — and run:
+```bash
+npm install
+npm start
+```
+
+That's the whole process. No `git`, no GitHub account, no cloning.
+
+> [!TIP]
+> To update later, just download the newest release the same way, extract it to a fresh folder, and run `npm install` again there.
+
+### Option 2: Clone & Run *(quickest if you're comfortable with git)*
+
+No authentication needed — just clone and go. Best if you want to poke around the source, track updates as they land, or contribute back.
 
 ```bash
 git clone https://github.com/sidx1-scratch/prefrontal
@@ -125,7 +162,10 @@ npm start
 
 A local web server starts and the app opens automatically at `http://localhost:3000`.
 
-### Option 2: Install via GitHub Packages
+> [!TIP]
+> To update later, run `git pull` from inside the `prefrontal` folder, then `npm install` again in case dependencies changed.
+
+### Option 3: Install via GitHub Packages
 
 More setup upfront, but once installed you can run Prefrontal from anywhere on your machine without keeping the source folder around.
 
@@ -394,15 +434,21 @@ If you use the **OpenRouter** runtime instead, your messages are sent to OpenRou
 - Try `npx serve .` as an alternative server.
 - Open the browser console (`F12`) and check for errors.
 
+### ❌ `npm install` fails or hangs after downloading a release zip
+- Make sure you extracted the **entire** archive before running commands inside it — a partial unzip is a common culprit.
+- Confirm Node.js v18+ is installed: `node -v`.
+- Delete `node_modules` (if present) and run `npm install` again.
+
 ---
 
 ## 🤝 Contributing
 
 Issues and PRs are welcome at [github.com/sidx1-scratch/prefrontal](https://github.com/sidx1-scratch/prefrontal). If you spot a bug or have a feature idea, open an issue before submitting a large PR so the approach can be discussed first.
-### Contribution Rule:  
+
+### Contribution Rule
 Prefrontal is a zero‑build, zero‑dependency project.
-You’re welcome to contribute, but all changes must keep the app lightweight and fully runnable as plain HTML/CSS/JS.
-No TypeScript, no frameworks, no bundlers, no compilation — ever.  
+You're welcome to contribute, but all changes must keep the app lightweight and fully runnable as plain HTML/CSS/JS.
+No TypeScript, no frameworks, no bundlers, no compilation — ever.
 The project must remain simple enough that anyone can open the folder and understand it.
 
 ---

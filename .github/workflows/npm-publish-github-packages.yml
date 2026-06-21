@@ -47,6 +47,15 @@ jobs:
           ver=$(node -p "require('./package.json').version")
           echo "ver=$ver" >> $GITHUB_OUTPUT
 
+      # CRITICAL STEP: Deletes the files from the runner's local workspace 
+      # right before creating the GitHub Release and running npm publish.
+      - name: Clean files before release & publish
+        run: |
+          rm -f google2a39946b5f941485.html
+          rm -f README.md
+          rm -f LICENSE
+          rm -rf docs/
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:

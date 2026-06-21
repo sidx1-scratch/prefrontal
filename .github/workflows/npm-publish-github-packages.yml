@@ -47,8 +47,9 @@ jobs:
           ver=$(node -p "require('./package.json').version")
           echo "ver=$ver" >> $GITHUB_OUTPUT
 
-      # CRITICAL STEP: Deletes the files from the runner's local workspace 
-      # right before creating the GitHub Release and running npm publish.
+      # -----------------------
+      # CLEANUP (your logic kept intact)
+      # -----------------------
       - name: Clean files before release & publish
         run: |
           rm -f google2a39946b5f941485.html
@@ -56,6 +57,9 @@ jobs:
           rm -f LICENSE
           rm -rf docs/
 
+      # -----------------------
+      # GITHUB RELEASE
+      # -----------------------
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
@@ -64,6 +68,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      # -----------------------
+      # NPM AUTH
+      # -----------------------
       - name: Setup npm auth
         run: |
           echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> ~/.npmrc
@@ -74,3 +81,12 @@ jobs:
         run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # -----------------------
+      # FIXED DISPATCH TRIGGER (IMPORTANT)
+      # -----------------------
+      - name: Trigger CI tests
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          event-type: prefrontal-tests

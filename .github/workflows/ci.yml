@@ -1,4 +1,4 @@
-name: Prefrontal CI (REAL + RELIABLE)
+name: Prefrontal CI (Stable Production)
 
 on:
   repository_dispatch:
@@ -22,75 +22,92 @@ jobs:
         with:
           node-version: 20
 
-      # -----------------------
+      # =========================================================
       # INSTALL DEPENDENCIES
-      # -----------------------
+      # =========================================================
       - name: Install dependencies
         run: npm install
 
-      # -----------------------
-      # OLLAMA INSTALL
-      # -----------------------
-      - name: Install Ollama (Linux/macOS)
-        if: runner.os != 'Windows'
+      # =========================================================
+      # OLLAMA INSTALL (FIXED PER OS)
+      # =========================================================
+
+      - name: Install Ollama (Linux)
+        if: runner.os == 'Linux'
         run: curl -fsSL https://ollama.com/install.sh | sh
+
+      - name: Install Ollama (macOS)
+        if: runner.os == 'macOS'
+        run: brew install ollama
 
       - name: Install Ollama (Windows)
         if: runner.os == 'Windows'
         shell: powershell
         run: irm https://ollama.com/install.ps1 | iex
 
-      - name: Start Ollama
+      - name: Fix Windows PATH
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: |
+          echo "$env:LOCALAPPDATA\Programs\Ollama" >> $env:GITHUB_PATH
+
+      - name: Verify Ollama
+        shell: bash
+        run: ollama --version || true
+
+      - name: Start Ollama server
+        shell: bash
+        run: ollama serve &
+
+      # =========================================================
+      # WAIT FOR OLLAMA (NO SLEEP)
+      # =========================================================
+      - name: Wait for Ollama API
         shell: bash
         run: |
-          ollama serve &
-          sleep 10
+          node -e "
+          const http=require('http');
+          const check=()=>http.get('http://localhost:11434/api/tags',res=>process.exit(0))
+            .on('error',()=>setTimeout(check,1000));
+          check();
+          "
 
       - name: Pull model
         run: ollama pull llama3.2:1b
 
-      # -----------------------
-      # llama.cpp (REAL BUILD CHECK)
-      # -----------------------
-      - name: Install build tools (Linux)
-        if: runner.os == 'Linux'
-        run: sudo apt-get update && sudo apt-get install -y cmake build-essential git
-
-      - name: Install build tools (macOS)
-        if: runner.os == 'macOS'
-        run: brew install cmake git
+      # =========================================================
+      # SAFE llama.cpp (NO OOM CRASH)
+      # =========================================================
 
       - name: Clone llama.cpp
         run: git clone https://github.com/ggerganov/llama.cpp.git
 
-      - name: Build llama.cpp (Linux/macOS)
-        if: runner.os != 'Windows'
+      - name: Configure llama.cpp (NO BUILD on Linux-heavy)
         run: |
           cd llama.cpp
           cmake -B build
-          cmake --build build -j
 
-      - name: Build llama.cpp (Windows)
-        if: runner.os == 'Windows'
-        shell: powershell
+      - name: Build llama.cpp (safe Linux)
+        if: runner.os != 'Linux'
         run: |
           cd llama.cpp
-          cmake -B build
-          cmake --build build --config Release
+          cmake --build build -j 2
 
-      # -----------------------
+      # Linux ONLY: avoid OOM crash
+      - name: Build llama.cpp (Linux minimal safe build)
+        if: runner.os == 'Linux'
+        run: |
+          cd llama.cpp
+          cmake --build build -j 1
+
+      # =========================================================
       # START YOUR APP
-      # -----------------------
+      # =========================================================
       - name: Start Prefrontal
         shell: bash
-        run: |
-          npm start &
-          sleep 5
+        run: npm start &
 
-      # -----------------------
-      # SMART PORT CHECK (NO SLEEP DEPENDENCY)
-      # -----------------------
-      - name: Wait for server
+      - name: Wait for frontend
         shell: bash
         run: |
           node -e "
@@ -100,18 +117,18 @@ jobs:
           check();
           "
 
-      # -----------------------
-      # REAL AI + SYSTEM TESTS
-      # -----------------------
-      - name: Run CI tests
+      # =========================================================
+      # REAL AI TESTS
+      # =========================================================
+      - name: Run AI tests
         shell: bash
         run: |
           node -e "
           const http=require('http');
 
-          function fail(stage, err){
+          function fail(stage,e){
             console.error('\n❌ ['+stage+' FAILED]');
-            console.error(err);
+            console.error(e);
             process.exit(1);
           }
 
@@ -153,18 +170,12 @@ jobs:
 
           (async()=>{
             try{
-              console.log('Frontend check...');
-              await new Promise((r,j)=>{
-                const c=()=>http.get('http://localhost:3000',r).on('error',()=>setTimeout(c,1000));
-                c();
-              });
-
               console.log('Single-turn test...');
               const r1=await ollama('say hello in one word');
               if(!r1) throw new Error('empty response');
 
               console.log('Multi-turn test...');
-              const r2=await ollama('remember YES. is it yes?');
+              const r2=await ollama('remember YES. is it YES?');
               const r3=await ollama('repeat last answer');
 
               if(!r2||!r3) throw new Error('multi-turn failed');

@@ -1,6 +1,6 @@
 {
   "name": "@sidx1-scratch/prefrontal",
-  "version": "1.1.35",
+  "version": "1.1.36",
   "description": "Prefrontal — Local AI Chatbot · 100% Private · OpenRouter + Ollama + Llama.cpp",
   "main": "app.js",
   "repository": {

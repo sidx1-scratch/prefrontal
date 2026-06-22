@@ -1,0 +1,191 @@
+name: Prefrontal CI (Stable + Intelligent + Cross-Platform)
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
+
+    # Pinning the model storage path here (rather than relying on each
+    # platform's default) means the cache step below actually caches
+    # something, and Linux/Windows agree on where to look.
+    env:
+      OLLAMA_MODELS: ${{ github.workspace }}/.ollama-models
+
+    steps:
+      # =========================================================
+      # CHECKOUT + NODE
+      # =========================================================
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      # =========================================================
+      # START FRONTEND (DETACHED, CROSS-PLATFORM SAFE)
+      # =========================================================
+      # Runs scripts/static-server.js instead of `npx serve`: npx resolves
+      # to a .cmd/.ps1 shim on Windows, which complicates spawning a
+      # reliably-detached background process. Plain `node` is a real
+      # executable on every platform. If your app needs a build step or a
+      # real backend instead of static files, swap the command below.
+
+      - name: Start frontend (background)
+        shell: bash
+        run: node scripts/start-background.js --name frontend --log app.log --pidfile frontend.pid -- node scripts/static-server.js 3000 .
+
+      - name: Wait for frontend
+        id: wait_frontend
+        shell: bash
+        run: node scripts/wait-for-port.js --ports 3000 --timeout 60000 --label frontend
+
+      # =========================================================
+      # MACOS SAFE MODE (NO OLLAMA)
+      # =========================================================
+
+      - name: macOS app validation (safe mode)
+        if: runner.os == 'macOS'
+        run: |
+          echo "🍎 macOS SAFE MODE (no Ollama due to CI instability)"
+          curl -f http://localhost:3000 || exit 1
+
+      # =========================================================
+      # OLLAMA INSTALL (LINUX + WINDOWS ONLY)
+      # =========================================================
+
+      - name: Install Ollama (Linux)
+        if: runner.os == 'Linux'
+        run: curl -fsSL https://ollama.com/install.sh | sh
+
+      # install.sh enables and starts an `ollama` systemd service
+      # immediately, running as its own system user with its own default
+      # model path. That would otherwise fight the manually-started,
+      # env-configured instance below for port 11434 and silently make the
+      # cache step below a no-op. Stop it first.
+      - name: Stop auto-started Ollama service (Linux)
+        if: runner.os == 'Linux'
+        run: sudo systemctl stop ollama 2>/dev/null || true
+
+      - name: Install Ollama (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: irm https://ollama.com/install.ps1 | iex
+
+      # The Windows installer also launches its own background app/server
+      # right away. Stop it for the same reason as above.
+      - name: Stop auto-started Ollama app (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Stop-Process -Name "ollama app" -Force -ErrorAction SilentlyContinue
+          Stop-Process -Name "ollama" -Force -ErrorAction SilentlyContinue
+
+      # =========================================================
+      # WINDOWS PATH FIX
+      # =========================================================
+      # NOTE: legacy `shell: powershell` (Windows PowerShell 5.1) does not
+      # write UTF-8 by default, and GITHUB_PATH must be UTF-8 for GitHub to
+      # parse it correctly. Using `pwsh` (PowerShell 7+, UTF-8 by default)
+      # plus an explicit encoding avoids a silently-ignored PATH entry.
+
+      - name: Fix Windows PATH
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Add-Content -Path $env:GITHUB_PATH -Value "$env:LOCALAPPDATA\Programs\Ollama" -Encoding utf8
+
+      # =========================================================
+      # START OLLAMA (DETACHED, CROSS-PLATFORM SAFE)
+      # =========================================================
+
+      - name: Start Ollama (Linux/Windows only)
+        if: runner.os != 'macOS'
+        shell: bash
+        run: node scripts/start-background.js --name ollama --log ollama.log --pidfile ollama.pid -- ollama serve
+
+      # =========================================================
+      # WAIT FOR OLLAMA API (SAFE + TIMEOUT)
+      # =========================================================
+
+      - name: Wait for Ollama API
+        if: runner.os != 'macOS'
+        shell: bash
+        run: node scripts/wait-for-ollama.js --port 11434 --timeout 60000
+
+      # =========================================================
+      # MODEL CACHE (SPEED OPTIMIZATION)
+      # =========================================================
+
+      - name: Cache Ollama models
+        if: runner.os != 'macOS'
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.OLLAMA_MODELS }}
+          key: ollama-${{ runner.os }}-llama3.2-1b
+          restore-keys: |
+            ollama-${{ runner.os }}-
+
+      # =========================================================
+      # PULL MODEL (LINUX + WINDOWS ONLY)
+      # =========================================================
+
+      - name: Pull model
+        if: runner.os != 'macOS'
+        run: ollama pull llama3.2:1b
+
+      # =========================================================
+      # RUN CI SMOKE TEST (INTELLIGENT)
+      # =========================================================
+
+      - name: Run CI smoke test
+        id: smoke_test
+        if: runner.os != 'macOS'
+        run: node tests/ci-smoke.js
+
+      # =========================================================
+      # LOG DUMP ON FAILURE (DEBUGGING)
+      # =========================================================
+
+      - name: Dump logs on failure
+        if: failure()
+        shell: bash
+        run: |
+          echo "===== APP LOG ====="
+          cat app.log 2>/dev/null || echo "(no app.log)"
+
+          echo "===== OLLAMA LOG ====="
+          cat ollama.log 2>/dev/null || echo "(no ollama.log)"
+
+      # =========================================================
+      # CI DASHBOARD SUMMARY
+      # =========================================================
+
+      - name: CI Dashboard Summary
+        if: always()
+        shell: bash
+        run: |
+          echo "=================================="
+          echo "📊 PREFRONTAL CI DASHBOARD"
+          echo "=================================="
+          echo "OS: ${{ runner.os }}"
+          echo "Frontend: ${{ steps.wait_frontend.outcome }}"
+          if [ "${{ runner.os }}" = "macOS" ]; then
+            echo "AI: SKIPPED (macOS safe mode)"
+          else
+            echo "AI: ${{ steps.smoke_test.outcome }}"
+          fi
+          echo "=================================="

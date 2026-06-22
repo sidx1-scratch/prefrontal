@@ -12,19 +12,39 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
 
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 40
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
 
       - name: Install dependencies
         run: npm install
 
-      - name: Run full CI pipeline
+      # =========================
+      # INSTALL OLLAMA (ALL OS)
+      # =========================
+
+      - name: Install Ollama (Linux/macOS)
+        if: runner.os != 'Windows'
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+
+      - name: Install Ollama (Windows)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: irm https://ollama.com/install.ps1 | iex
+
+      - name: Add Ollama to PATH (Windows fix)
+        if: runner.os == 'Windows'
+        shell: powershell
+        run: echo "$env:LOCALAPPDATA\Programs\Ollama" >> $env:GITHUB_PATH
+
+      # =========================
+      # RUN FULL PIPELINE
+      # =========================
+
+      - name: Run CI
         run: node tests/run-ci.js

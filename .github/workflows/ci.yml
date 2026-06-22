@@ -31,7 +31,7 @@ jobs:
         run: npm install
 
       # =========================================================
-      # START FRONTEND (FIXED WINDOWS HANG ISSUE)
+      # START FRONTEND
       # =========================================================
 
       - name: Start app (stable serve)
@@ -41,50 +41,42 @@ jobs:
           echo "Frontend starting..."
 
       # =========================================================
-      # SAFE FRONTEND WAIT (NO INFINITE LOOP)
+      # WAIT FOR FRONTEND
       # =========================================================
 
-      - name: Wait for frontend (timeout-safe + multi-port fallback)
+      - name: Wait for frontend
         shell: node
         run: |
           const http = require("http");
 
-          const ports = [3000, 3001, 3002];
           const timeout = Date.now() + 60000;
 
-          function check(i = 0) {
+          function check() {
             if (Date.now() > timeout) {
-              console.error("❌ Frontend timeout");
+              console.error("Frontend timeout");
               process.exit(1);
             }
 
-            if (i >= ports.length) {
-              setTimeout(() => check(0), 1000);
-              return;
-            }
-
-            http.get(`http://localhost:${ports[i]}`, res => {
-              console.log(`✅ Frontend running on port ${ports[i]}`);
+            http.get("http://localhost:3000", res => {
+              console.log("Frontend ready");
               process.exit(0);
-            }).on("error", () => {
-              setTimeout(() => check(i + 1), 1000);
-            });
+            }).on("error", () => setTimeout(check, 1000));
           }
 
           check();
 
       # =========================================================
-      # MACOS SAFE MODE (NO OLLAMA)
+      # MACOS SAFE MODE
       # =========================================================
 
-      - name: macOS app validation (safe mode)
+      - name: macOS validation
         if: runner.os == 'macOS'
         run: |
-          echo "🍎 macOS SAFE MODE (no Ollama due to CI instability)"
+          echo "macOS safe mode"
           curl -f http://localhost:3000 || exit 1
 
       # =========================================================
-      # OLLAMA INSTALL (LINUX + WINDOWS ONLY)
+      # INSTALL OLLAMA (Linux + Windows only)
       # =========================================================
 
       - name: Install Ollama (Linux)
@@ -97,29 +89,21 @@ jobs:
         run: irm https://ollama.com/install.ps1 | iex
 
       # =========================================================
-      # WINDOWS PATH FIX
+      # START OLLAMA
       # =========================================================
 
-      - name: Fix Windows PATH
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: echo "$env:LOCALAPPDATA\Programs\Ollama" >> $env:GITHUB_PATH
-
-      # =========================================================
-      # START OLLAMA (SAFE BACKGROUND)
-      # =========================================================
-
-      - name: Start Ollama (Linux/Windows only)
+      - name: Start Ollama
         if: runner.os != 'macOS'
         shell: bash
         run: |
           nohup ollama serve > ollama.log 2>&1 &
+          echo "Ollama starting..."
 
       # =========================================================
-      # WAIT FOR OLLAMA API (SAFE + TIMEOUT)
+      # WAIT FOR OLLAMA
       # =========================================================
 
-      - name: Wait for Ollama API
+      - name: Wait for Ollama
         if: runner.os != 'macOS'
         shell: node
         run: |
@@ -129,7 +113,7 @@ jobs:
 
           function check() {
             if (Date.now() > timeout) {
-              console.error("❌ Ollama timeout");
+              console.error("Ollama timeout");
               process.exit(1);
             }
 
@@ -139,7 +123,7 @@ jobs:
               res.on("end", () => {
                 try {
                   JSON.parse(data);
-                  console.log("✅ Ollama ready");
+                  console.log("Ollama ready");
                   process.exit(0);
                 } catch {
                   setTimeout(check, 1500);
@@ -151,7 +135,7 @@ jobs:
           check();
 
       # =========================================================
-      # MODEL CACHE (SPEED OPTIMIZATION)
+      # CACHE MODELS
       # =========================================================
 
       - name: Cache Ollama models
@@ -162,7 +146,7 @@ jobs:
           key: ollama-${{ runner.os }}-llama3.2-1b
 
       # =========================================================
-      # PULL MODEL (LINUX + WINDOWS ONLY)
+      # PULL MODEL
       # =========================================================
 
       - name: Pull model
@@ -170,7 +154,7 @@ jobs:
         run: ollama pull llama3.2:1b
 
       # =========================================================
-      # RUN CI SMOKE TEST (INTELLIGENT)
+      # SMOKE TEST
       # =========================================================
 
       - name: Run CI smoke test
@@ -178,33 +162,44 @@ jobs:
         run: node tests/ci-smoke.js
 
       # =========================================================
-      # LOG DUMP ON FAILURE (DEBUGGING)
+      # SAFE LOG DUMP (FIXED)
       # =========================================================
 
-      - name: Dump logs on failure
-        if: failure()
+      - name: Dump logs on failure (Linux/macOS)
+        if: failure() && runner.os != 'Windows'
+        shell: bash
         run: |
           echo "===== APP LOG ====="
-          cat app.log || type app.log
+          if [ -f app.log ]; then cat app.log; else echo "no app.log"; fi
 
           echo "===== OLLAMA LOG ====="
-          cat ollama.log || type ollama.log
+          if [ -f ollama.log ]; then cat ollama.log; else echo "no ollama.log"; fi
+
+      - name: Dump logs on failure (Windows)
+        if: failure() && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Write-Host "===== APP LOG ====="
+          if (Test-Path app.log) { Get-Content app.log } else { Write-Host "no app.log" }
+
+          Write-Host "===== OLLAMA LOG ====="
+          if (Test-Path ollama.log) { Get-Content ollama.log } else { Write-Host "no ollama.log" }
 
       # =========================================================
-      # CI DASHBOARD SUMMARY
+      # DASHBOARD
       # =========================================================
 
       - name: CI Dashboard Summary
         if: always()
+        shell: bash
         run: |
           echo "=================================="
-          echo "📊 PREFRONTAL CI DASHBOARD"
-          echo "=================================="
+          echo "CI DASHBOARD"
           echo "OS: ${{ runner.os }}"
           echo "Frontend: OK"
           if [ "${{ runner.os }}" = "macOS" ]; then
-            echo "AI: SKIPPED (macOS safe mode)"
+            echo "AI: SKIPPED"
           else
-            echo "AI: TESTED (Ollama)"
+            echo "AI: TESTED"
           fi
           echo "=================================="

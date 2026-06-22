@@ -12,6 +12,7 @@ jobs:
         os: [ubuntu-latest, windows-latest, macos-latest]
 
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 40
 
     steps:
       - uses: actions/checkout@v4
@@ -24,27 +25,32 @@ jobs:
         run: npm install
 
       # =========================
-      # OLLAMA INSTALL
+      # OLLAMA INSTALL (FIXED PER OS)
       # =========================
 
-      - name: Install Ollama (Linux/Windows)
-        if: runner.os != 'macOS'
-        run: |
-          curl -fsSL https://ollama.com/install.sh | sh
+      - name: Install Ollama (Linux)
+        if: runner.os == 'Linux'
+        run: curl -fsSL https://ollama.com/install.sh | sh
 
-      - name: Install Ollama (Windows fix)
+      - name: Install Ollama (Windows)
         if: runner.os == 'Windows'
         shell: powershell
         run: irm https://ollama.com/install.ps1 | iex
 
-      - name: Add Ollama PATH (Windows)
+      - name: Install Ollama (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh || echo "macOS Ollama install may be unstable"
+
+      - name: Add Ollama PATH (Windows fix)
         if: runner.os == 'Windows'
         shell: powershell
         run: echo "$env:LOCALAPPDATA\Programs\Ollama" >> $env:GITHUB_PATH
 
       # =========================
-      # RUN PIPELINE
+      # IMPORTANT: PREVENT HANGING
       # =========================
 
-      - name: Run CI
-        run: node tests/run-ci.js
+      - name: Start CI with timeout guard
+        run: |
+          timeout 30m node tests/run-ci.js

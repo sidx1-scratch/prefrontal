@@ -1,6 +1,7 @@
 const { spawn, spawnSync } = require("child_process");
 const http = require("http");
 const children = [];
+
 function run(cmd, args, opts = {}) {
   const p = spawn(cmd, args, {
     stdio: "inherit",
@@ -15,6 +16,7 @@ function run(cmd, args, opts = {}) {
     });
   });
 }
+
 function waitFor(url, timeout = 90000) {
   return new Promise((resolve, reject) => {
     const end = Date.now() + timeout;
@@ -30,58 +32,42 @@ function waitFor(url, timeout = 90000) {
     check();
   });
 }
-function hasOllama() {
-  try {
-    const r = spawnSync("ollama", ["--version"], {
-      stdio: "ignore",
-      shell: process.platform === "win32"
-    });
-    return r.status === 0;
-  } catch {
-    return false;
-  }
-}
+
 function cleanup() {
-  console.log("🧹 Cleaning up processes...");
+  console.log("清理 Cleaning up processes...");
   for (const p of children) {
     try {
       p.kill("SIGKILL");
     } catch {}
   }
 }
+
 process.on("exit", cleanup);
 process.on("SIGINT", () => {
   cleanup();
   process.exit(1);
 });
+
 async function main() {
   console.log("🚀 CI START");
+
   // =========================
   // FRONTEND (REAL APP)
   // =========================
   console.log("Starting frontend (npm start)...");
   run("npm", ["start"]).catch(() => {});
   await waitFor("http://localhost:3000");
+
   // =========================
-  // OLLAMA (CLI SERVER, ALL PLATFORMS)
+  // OLLAMA (PULL & WARMUP)
   // =========================
-  // On macOS the Homebrew-installed `ollama` binary is CLI-only (no .app),
-  // so `ollama serve` runs as a plain background process just like on
-  // Linux/Windows — nothing tries to open a GUI window. We still set
-  // OLLAMA_NOPROMPT / disable the app-launch behavior just in case a
-  // non-Homebrew install is present, by forcing it to use the CLI server
-  // directly instead of `open -a Ollama`.
-  if (hasOllama()) {
-    console.log("🤖 Starting Ollama (CLI server)...");
-    run("ollama", ["serve"]).catch(() => {});
-    await waitFor("http://localhost:11434/api/tags");
-    console.log("📦 Pulling model...");
-    await run("ollama", ["pull", "llama3.2:1b"]);
-    console.log("⏳ Model warmup...");
-    await new Promise(r => setTimeout(r, 5000));
-  } else {
-    console.log("⚠️ Ollama not found — skipping AI tests");
-  }
+  // The server is already started automatically by ai-action/setup-ollama.
+  // We simply verify availability, pull the model, and warm it up.
+  console.log("📦 Pulling model...");
+  await run("ollama", ["pull", "llama3.2:1b"]);
+  console.log("⏳ Model warmup...");
+  await new Promise(r => setTimeout(r, 5000));
+
   // =========================
   // TESTS
   // =========================
@@ -91,6 +77,7 @@ async function main() {
   cleanup();
   process.exit(0);
 }
+
 main().catch(err => {
   console.error("❌ CI FAILED");
   console.error(err);

@@ -1,17 +1,17 @@
 const { spawn, spawnSync } = require("child_process");
 const http = require("http");
 
-function sleep(ms) {
-  return new Promise(r => setTimeout(r, ms));
-}
+const children = [];
 
 function run(cmd, args) {
-  return new Promise((resolve, reject) => {
-    const p = spawn(cmd, args, {
-      stdio: "inherit",
-      shell: process.platform === "win32"
-    });
+  const p = spawn(cmd, args, {
+    stdio: "inherit",
+    shell: process.platform === "win32"
+  });
 
+  children.push(p);
+
+  return new Promise((resolve, reject) => {
     p.on("exit", code => {
       if (code === 0) resolve();
       else reject(new Error(`${cmd} failed (${code})`));
@@ -25,13 +25,13 @@ function waitFor(url, timeout = 90000) {
 
     function check() {
       if (Date.now() > end) {
-        return reject(new Error(`Timeout waiting for ${url}`));
+        return reject(new Error(`Timeout: ${url}`));
       }
 
       http.get(url, res => {
         res.resume();
         resolve();
-      }).on("error", () => setTimeout(check, 1500));
+      }).on("error", () => setTimeout(check, 1200));
     }
 
     check();
@@ -50,50 +50,71 @@ function hasOllama() {
   }
 }
 
+function cleanup() {
+  console.log("🧹 Cleaning up processes...");
+
+  for (const p of children) {
+    try {
+      p.kill("SIGKILL");
+    } catch {}
+  }
+}
+
+process.on("exit", cleanup);
+process.on("SIGINT", () => {
+  cleanup();
+  process.exit(1);
+});
+
 async function main() {
   console.log("🚀 CI START");
 
   // =========================
-  // 1. START FRONTEND (REAL APP)
+  // FRONTEND (REAL APP)
   // =========================
   console.log("Starting frontend (npm start)...");
   run("npm", ["start"]).catch(() => {});
 
-  // =========================
-  // 2. WAIT FRONTEND
-  // =========================
   await waitFor("http://localhost:3000");
 
   // =========================
-  // 3. OLLAMA SETUP
+  // OLLAMA (SKIP MACOS)
   // =========================
-  if (hasOllama()) {
-    console.log("Starting Ollama...");
+  const isMac = process.platform === "darwin";
+
+  if (isMac) {
+    console.log("⚠️ macOS CI: Ollama is unstable and skipped");
+  } else if (hasOllama()) {
+    console.log("🤖 Starting Ollama...");
     run("ollama", ["serve"]).catch(() => {});
 
-    console.log("Waiting for Ollama API...");
     await waitFor("http://localhost:11434/api/tags");
 
-    console.log("Pulling model (llama3.2:1b)...");
+    console.log("📦 Pulling model...");
     await run("ollama", ["pull", "llama3.2:1b"]);
 
-    console.log("Waiting for model to stabilize...");
-    await sleep(5000);
+    console.log("⏳ Model warmup...");
+    await new Promise(r => setTimeout(r, 5000));
   } else {
     console.log("⚠️ Ollama not found — skipping AI tests");
   }
 
   // =========================
-  // 4. RUN TESTS
+  // TESTS
   // =========================
-  console.log("Running smoke tests...");
+  console.log("Running tests...");
   await run("node", ["tests/ci-smoke.js"]);
 
   console.log("✅ CI PASSED");
+
+  cleanup();
+  process.exit(0);
 }
 
 main().catch(err => {
   console.error("❌ CI FAILED");
   console.error(err);
+
+  cleanup();
   process.exit(1);
 });

@@ -23,37 +23,11 @@ jobs:
       - name: Install dependencies
         run: npm install
       # =========================
-      # OLLAMA INSTALL (OS SAFE)
+      # OLLAMA INSTALL (AUTOMATED)
       # =========================
-      - name: Install Ollama (Linux)
-        if: runner.os == 'Linux'
-        run: curl -fsSL https://ollama.com/install.sh | sh
-      - name: Install Ollama (Windows)
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: irm https://ollama.com/install.ps1 | iex
-      - name: Install Ollama (macOS, official CLI tarball)
-        if: runner.os == 'macOS'
-        run: |
-          # The install.sh script pulls the full Ollama.app GUI, which hangs
-          # on a headless runner. Homebrew's formula is CLI-only but is
-          # missing the bundled llama-server runner binaries (known Homebrew
-          # packaging gap), causing "llama-server binary not found" at
-          # generate time. The official GitHub release tarball is CLI-only
-          # AND includes the runners — but it uses GNU tar's sparse-file
-          # format for the binary, and macOS's built-in `tar` (bsdtar) mis-
-          # extracts that into a GNUSparseFile.0/ subfolder instead of
-          # bin/ollama (see ollama/ollama#11262). Use GNU tar to extract
-          # correctly.
-          brew install gnu-tar
-          curl -fsSL -o ollama-darwin.tgz https://github.com/ollama/ollama/releases/latest/download/ollama-darwin.tgz
-          sudo gtar -C /usr/local -xzf ollama-darwin.tgz
-          rm ollama-darwin.tgz
-          ollama --version
-      - name: Add Ollama to PATH (Windows fix)
-        if: runner.os == 'Windows'
-        shell: powershell
-        run: echo "$env:LOCALAPPDATA\Programs\Ollama" >> $env:GITHUB_PATH
+      - name: Setup Ollama
+        uses: ai-action/setup-ollama@v1
+
       # =========================
       # RUN CI PIPELINE (SAFE)
       # =========================

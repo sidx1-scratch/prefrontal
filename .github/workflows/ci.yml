@@ -32,15 +32,20 @@ jobs:
         if: runner.os == 'Windows'
         shell: powershell
         run: irm https://ollama.com/install.ps1 | iex
-      - name: Install Ollama (macOS, CLI only via Homebrew)
+      - name: Install Ollama (macOS, official CLI tarball)
         if: runner.os == 'macOS'
         run: |
-          # The official install.sh script on macOS pulls down the full
-          # Ollama.app (menu-bar GUI app). On a headless CI runner there is
-          # no GUI session, so anything that tries to launch the .app hangs
-          # or fails. Homebrew's formula installs just the CLI binary, which
-          # is all `ollama serve` needs.
-          brew install ollama
+          # The install.sh script pulls the full Ollama.app GUI, which hangs
+          # on a headless runner. Homebrew's formula is CLI-only but is
+          # missing the bundled llama-server runner binaries (known Homebrew
+          # packaging gap), causing "llama-server binary not found" at
+          # generate time. The official GitHub release tarball is CLI-only
+          # AND includes the runners, so it's the only option that actually
+          # works headless.
+          curl -fsSL -o ollama-darwin.tgz https://github.com/ollama/ollama/releases/latest/download/ollama-darwin.tgz
+          sudo tar -C /usr/local -xzf ollama-darwin.tgz
+          rm ollama-darwin.tgz
+          ollama --version
       - name: Add Ollama to PATH (Windows fix)
         if: runner.os == 'Windows'
         shell: powershell

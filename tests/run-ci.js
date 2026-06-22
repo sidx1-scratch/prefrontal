@@ -73,17 +73,7 @@ async function main() {
   // directly instead of `open -a Ollama`.
   if (hasOllama()) {
     console.log("🤖 Starting Ollama (CLI server)...");
-    run("ollama", ["serve"], {
-      env: {
-        ...process.env,
-        // Prevents the macOS build from trying to launch the menu-bar
-        // GUI app / Spotlight-registered .app bundle; forces pure CLI
-        // server mode on all platforms.
-        OLLAMA_NOHISTORY: "1",
-        OLLAMA_RUNNERS_DIR: process.env.OLLAMA_RUNNERS_DIR || "",
-        LAUNCHED_BY_CLI: "1"
-      }
-    }).catch(() => {});
+    run("ollama", ["serve"]).catch(() => {});
     await waitFor("http://localhost:11434/api/tags");
     console.log("📦 Pulling model...");
     await run("ollama", ["pull", "llama3.2:1b"]);

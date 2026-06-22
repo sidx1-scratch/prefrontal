@@ -1,19 +1,30 @@
-const { spawn } = require("child_process");
+const { spawn, spawnSync } = require("child_process");
 const http = require("http");
 
-function run(cmd, args, opts = {}) {
+function run(cmd, args) {
   return new Promise((resolve, reject) => {
     const p = spawn(cmd, args, {
       stdio: "inherit",
-      shell: process.platform === "win32",
-      ...opts
+      shell: process.platform === "win32"
     });
 
     p.on("exit", code => {
       if (code === 0) resolve();
-      else reject(new Error(`${cmd} failed with code ${code}`));
+      else reject(new Error(`${cmd} failed`));
     });
   });
+}
+
+function hasOllama() {
+  try {
+    const res = spawnSync("ollama", ["--version"], {
+      stdio: "ignore",
+      shell: process.platform === "win32"
+    });
+    return res.status === 0;
+  } catch {
+    return false;
+  }
 }
 
 function wait(url, timeout = 60000) {
@@ -36,24 +47,26 @@ function wait(url, timeout = 60000) {
 async function main() {
   console.log("🚀 CI starting...");
 
-  // 1. Start static server
-  console.log("Starting static server...");
+  // start frontend
   run("node", ["tests/static-server.js"]).catch(() => {});
 
-  // 2. Start Ollama (if installed)
-  console.log("Starting Ollama...");
-  run("ollama", ["serve"]).catch(() => {});
+  // start ollama ONLY if installed
+  if (hasOllama()) {
+    console.log("🤖 Starting Ollama...");
+    run("ollama", ["serve"]).catch(() => {});
+  } else {
+    console.log("⚠️ Ollama not available - skipping AI tests");
+  }
 
-  // 3. Wait for frontend
-  console.log("Waiting for frontend...");
+  // wait frontend
   await wait("http://localhost:3000");
 
-  // 4. Wait for Ollama API
-  console.log("Waiting for Ollama...");
-  await wait("http://localhost:11434/api/tags");
+  // wait ollama only if expected
+  if (hasOllama()) {
+    await wait("http://localhost:11434/api/tags");
+  }
 
-  // 5. Run smoke tests
-  console.log("Running smoke tests...");
+  // run tests
   await run("node", ["tests/ci-smoke.js"]);
 
   console.log("✅ CI PASSED");

@@ -122,11 +122,12 @@ Open `http://localhost:3000`, go to Settings, and set:
 
 ## 📦 Installation Options
 
-Three ways to get Prefrontal running locally — pick whichever fits how you work.
+Four ways to get Prefrontal running locally — pick whichever fits how you work.
 
 | Method | Best if you... | Git needed? |
 |---|---|---|
 | 📥 **Download a Release** | don't want to install or touch git at all | ❌ No |
+| ⚡ **Quick Install Script** | want a one-line install with no git and no extra repo clutter | ❌ No |
 | 🧬 **Clone & Run** | are comfortable with git and want to stay on the latest commit | ✅ Yes |
 | 🌍 **GitHub Packages** | want to install once and run from anywhere without keeping a source folder around | ✅ Yes (login only) |
 
@@ -152,7 +153,26 @@ That's the whole process. No `git`, no GitHub account, no cloning.
 > [!TIP]
 > To update later, just download the newest release the same way, extract it to a fresh folder, and run `npm install` again there.
 
-### Option 2: Clone & Run *(quickest if you're comfortable with git)*
+### Option 2: Quick Install Script *(no Git required, fetches only the files the app needs)*
+
+Prefer not to clone the whole repo (including docs, CI workflows, and tests) just to run the app? This one-liner downloads only the runtime-required files — `app.js`, `index.html`, `style.css`, `manifest.json`, `package.json`, `package-lock.json`, and the `vendor/` libraries — straight from GitHub, no `git` involved.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sidx1-scratch/prefrontal/refs/heads/main/install.sh | bash
+cd prefrontal
+npm install && npm start
+```
+
+By default it installs into a `prefrontal` folder in your current directory. To install into a different folder name instead:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sidx1-scratch/prefrontal/refs/heads/main/install.sh | bash -s -- my-folder-name
+```
+
+> [!TIP]
+> To update later, just re-run the same command — it'll re-fetch the latest versions of the required files into the same folder.
+
+### Option 3: Clone & Run *(quickest if you're comfortable with git)*
 
 No authentication needed — just clone and go. Best if you want to poke around the source, track updates as they land, or contribute back.
 
@@ -168,7 +188,7 @@ A local web server starts and the app opens automatically at `http://localhost:3
 > [!TIP]
 > To update later, run `git pull` from inside the `prefrontal` folder, then `npm install` again in case dependencies changed.
 
-### Option 3: Install via GitHub Packages
+### Option 4: Install via GitHub Packages
 
 More setup upfront, but once installed you can run Prefrontal from anywhere on your machine without keeping the source folder around.
 
@@ -447,7 +467,7 @@ If you use the **OpenRouter** runtime instead, your messages are sent to OpenRou
 
 ## 🤝 Contributing
 
-Issues and PRs are welcome at [github.com/sidx1-scratch/prefrontal](https://github.com/sidx1-scratch/prefrontal). If you spot a bug or have a feature idea, open an issue before submitting a large PR so the approach can be discussed first.
+Issues and PRs are welcome at [github.com/sidx1-scratch/prefrontal](https://github.com/sidx1-scratch/prefrontal). If you spot a bug or have a feature idea, open an issue or comment in a discussion before submitting a large PR so the approach can be discussed first.
 
 ### Contribution Rule
 Prefrontal is a zero‑build, zero‑dependency project.

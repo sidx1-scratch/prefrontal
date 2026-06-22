@@ -23,28 +23,27 @@ jobs:
       - name: Install dependencies
         run: npm install
 
-      # =========================
-      # INSTALL OLLAMA (ALL OS)
-      # =========================
+      # -------------------------
+      # INSTALL OLLAMA (SAFE)
+      # -------------------------
 
       - name: Install Ollama (Linux/macOS)
         if: runner.os != 'Windows'
-        run: |
-          curl -fsSL https://ollama.com/install.sh | sh
+        run: curl -fsSL https://ollama.com/install.sh | sh
 
       - name: Install Ollama (Windows)
         if: runner.os == 'Windows'
         shell: powershell
         run: irm https://ollama.com/install.ps1 | iex
 
-      - name: Add Ollama to PATH (Windows fix)
+      - name: Add Ollama PATH (Windows fix)
         if: runner.os == 'Windows'
         shell: powershell
         run: echo "$env:LOCALAPPDATA\Programs\Ollama" >> $env:GITHUB_PATH
 
-      # =========================
-      # RUN FULL PIPELINE
-      # =========================
+      # -------------------------
+      # RUN EVERYTHING
+      # -------------------------
 
-      - name: Run CI
+      - name: Run CI pipeline
         run: node tests/run-ci.js

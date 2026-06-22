@@ -1,0 +1,92 @@
+name: Auto Release + GitHub Packages
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  release:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: https://npm.pkg.github.com/
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Bump version (patch)
+        run: npm version patch -m "auto version bump %s"
+
+      - name: Push commit + tags
+        run: git push origin main --follow-tags
+
+      - name: Read version
+        id: version
+        run: |
+          ver=$(node -p "require('./package.json').version")
+          echo "ver=$ver" >> $GITHUB_OUTPUT
+
+      # -----------------------
+      # CLEANUP (your logic kept intact)
+      # -----------------------
+      - name: Clean files before release & publish
+        run: |
+          rm -f google2a39946b5f941485.html
+          rm -f README.md
+          rm -f LICENSE
+          rm -rf docs/
+
+      # -----------------------
+      # GITHUB RELEASE
+      # -----------------------
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.ver }}
+          name: v${{ steps.version.outputs.ver }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # -----------------------
+      # NPM AUTH
+      # -----------------------
+      - name: Setup npm auth
+        run: |
+          echo "//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}" >> ~/.npmrc
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Publish package
+        run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # -----------------------
+      # FIXED DISPATCH TRIGGER (IMPORTANT)
+      # -----------------------
+      - name: Trigger CI tests
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          event-type: prefrontal-tests

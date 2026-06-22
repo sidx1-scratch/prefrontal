@@ -1,4 +1,4 @@
-name: Prefrontal CI (Stable)
+name: Prefrontal CI (Stable + Cross Platform)
 
 on:
   push:
@@ -15,9 +15,14 @@ jobs:
     timeout-minutes: 40
 
     steps:
-      - uses: actions/checkout@v4
+      # =========================
+      # CHECKOUT + NODE
+      # =========================
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 20
 
@@ -25,7 +30,7 @@ jobs:
         run: npm install
 
       # =========================
-      # OLLAMA INSTALL (FIXED PER OS)
+      # OLLAMA INSTALL (OS SAFE)
       # =========================
 
       - name: Install Ollama (Linux)
@@ -40,17 +45,17 @@ jobs:
       - name: Install Ollama (macOS)
         if: runner.os == 'macOS'
         run: |
-          curl -fsSL https://ollama.com/install.sh | sh || echo "macOS Ollama install may be unstable"
+          curl -fsSL https://ollama.com/install.sh | sh || echo "macOS Ollama may be unstable in CI"
 
-      - name: Add Ollama PATH (Windows fix)
+      - name: Add Ollama to PATH (Windows fix)
         if: runner.os == 'Windows'
         shell: powershell
         run: echo "$env:LOCALAPPDATA\Programs\Ollama" >> $env:GITHUB_PATH
 
       # =========================
-      # IMPORTANT: PREVENT HANGING
+      # RUN CI PIPELINE (SAFE)
       # =========================
 
-      - name: Start CI with timeout guard
-        run: |
-          timeout 30m node tests/run-ci.js
+      - name: Run CI tests
+        run: node tests/run-ci.js
+        timeout-minutes: 35

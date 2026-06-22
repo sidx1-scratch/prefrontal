@@ -171,6 +171,7 @@ curl -fsSL https://raw.githubusercontent.com/sidx1-scratch/prefrontal/refs/heads
 
 > [!TIP]
 > To update later, just re-run the same command — it'll re-fetch the latest versions of the required files into the same folder.
+> Also for windows to run sh commands you can use git bash or instead just download a realse or clone the repo or use github packages.
 
 ### Option 3: Clone & Run *(quickest if you're comfortable with git)*
 

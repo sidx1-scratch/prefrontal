@@ -26,7 +26,7 @@
 ![Offline](https://img.shields.io/badge/100%25-Offline-success)
 [![Prefrontal CI (Stable + Cross Platform)](https://github.com/sidx1-scratch/prefrontal/actions/workflows/ci.yml/badge.svg)](https://github.com/sidx1-scratch/prefrontal/actions/workflows/ci.yml)
 
-**100% Offline · No Ads · No API Keys Required · Your Data Stays on Your Device**
+**100% Offline · No Ads · Your Data Stays on Your Device**
 
 Prefrontal is an open-source, privacy-first chat interface for local AI models. It works with **Ollama** (desktop), **Llama.cpp** (any platform, including Android via Termux), and optionally **OpenRouter** if you'd rather skip local setup entirely. No cloud dependency, no telemetry, no subscriptions.
 

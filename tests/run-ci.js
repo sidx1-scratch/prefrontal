@@ -34,7 +34,7 @@ function waitFor(url, timeout = 90000) {
 }
 
 function cleanup() {
-  console.log("清理 Cleaning up processes...");
+  console.log("cleaning up processes...");
   for (const p of children) {
     try {
       p.kill("SIGKILL");

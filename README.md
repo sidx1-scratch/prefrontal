@@ -24,6 +24,8 @@
 ![License](https://img.shields.io/badge/license-GPLv3-green)
 ![Offline](https://img.shields.io/badge/100%25-Offline-success)
 [![Prefrontal CI (Stable + Cross Platform)](https://github.com/sidx1-scratch/prefrontal/actions/workflows/ci.yml/badge.svg)](https://github.com/sidx1-scratch/prefrontal/actions/workflows/ci.yml)
+[![Auto Release + GitHub Packages](https://github.com/sidx1-scratch/prefrontal/actions/workflows/npm-publish-github-packages.yml/badge.svg)](https://github.com/sidx1-scratch/prefrontal/actions/workflows/npm-publish-github-packages.yml)
+[![pages-build-deployment](https://github.com/sidx1-scratch/prefrontal/actions/workflows/pages/pages-build-deployment/badge.svg)](https://github.com/sidx1-scratch/prefrontal/actions/workflows/pages/pages-build-deployment)
 
 **100% Offline · No Ads · Your Data Stays on Your Device**
 

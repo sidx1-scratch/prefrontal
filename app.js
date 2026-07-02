@@ -25,6 +25,7 @@ const state = {
     theme:        'dark',
     apiKey:       '',
     personality:  'balanced', // tracks which preset is active
+    webSearch:    false, // OpenRouter-only: enable the ':web' search plugin
   },
   totalTokens: 0,
   profile: null,  // { deviceId, displayName, avatar, createdAt }
@@ -144,6 +145,8 @@ const els = {
   soundToggle:      $('soundToggle'),
   shortcutOptions:  $('shortcutOptions'),
   apiKey:           $('apiKey'),
+  webSearchGroup:   $('webSearchGroup'),
+  webSearchToggle:  $('webSearchToggle'),
   resetSettingsBtn: $('resetSettingsBtn'),
   saveSettingsBtn:  $('saveSettingsBtn'),
   confirmOverlay:   $('confirmOverlay'),
@@ -311,6 +314,100 @@ function escapeHtml(t) {
   return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+// ── WEB SEARCH (prompt-driven, DuckDuckGo Instant Answer API) ──────
+// Prefrontal does NOT use OpenRouter's built-in search plugin. Instead, when
+// Web Search is on, the model is told (via a system-prompt addendum) that it
+// can request a search by replying with ONLY a small JSON object. sendRequest()
+// detects that JSON, runs the search itself against DuckDuckGo, and feeds the
+// results back to the model as a follow-up message so it can answer normally.
+// This keeps the feature entirely in Prefrontal's hands — it works with the
+// free DuckDuckGo API and needs no extra provider-side capability.
+const WEB_SEARCH_INSTRUCTIONS = `You have the ability to search the web when you need current information, facts you're not sure of, or anything that could have changed since your training. To search, reply with ONLY this JSON object and nothing else — no other words, no markdown code fences, no explanation before or after it:
+{"search_query": "your search terms here"}
+The app will run that search and send the results back to you in a follow-up message. Once you have the results, answer the user's original question normally, in plain text, using them. Only search when it would genuinely help — for things you already know, or normal conversation, just answer directly without searching.`;
+
+// Pulls a {"search_query": "..."} request out of a model reply. Tolerates
+// accidental code-fence wrapping even though the prompt asks the model not
+// to use one, since smaller/free models don't always follow instructions
+// exactly. Returns null for anything that isn't a clean search request.
+function extractSearchQuery(text) {
+  let t = (text || '').trim();
+  t = t.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+  if (!t.startsWith('{') || !t.endsWith('}')) return null;
+  try {
+    const obj = JSON.parse(t);
+    if (obj && typeof obj.search_query === 'string' && obj.search_query.trim()) {
+      return obj.search_query.trim();
+    }
+  } catch (e) { /* not JSON, not a search request */ }
+  return null;
+}
+
+// Queries DuckDuckGo's free, keyless Instant Answer API. This is a knowledge-graph
+// style API, not a full search index — it works well for facts, definitions, people,
+// and topics with a Wikipedia-style abstract, but can come back empty for narrower
+// or very current queries. Returns an array of {title, url, snippet}, newest/most
+// relevant first, capped to keep the follow-up prompt small.
+async function duckDuckGoSearch(query) {
+  const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1&no_redirect=1`;
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const data = await res.json();
+    const items = [];
+    if (data.AbstractText) {
+      items.push({ title: data.Heading || query, url: data.AbstractURL || url, snippet: data.AbstractText });
+    }
+    if (data.Answer) {
+      items.push({ title: data.AnswerType || 'Answer', url: data.AbstractURL || url, snippet: data.Answer });
+    }
+    const walkTopics = (topics) => {
+      for (const t of topics || []) {
+        if (items.length >= 6) return;
+        if (t.Topics) { walkTopics(t.Topics); continue; }
+        if (t.Text && t.FirstURL) {
+          items.push({ title: t.Text.split(' - ')[0].slice(0, 90), url: t.FirstURL, snippet: t.Text });
+        }
+      }
+    };
+    walkTopics(data.RelatedTopics);
+    return items.slice(0, 6);
+  } catch (e) {
+    return []; // network hiccup or CORS issue — fail quietly, model answers from its own knowledge
+  }
+}
+
+// Turns DuckDuckGo results into the follow-up user-role message sent back to
+// the model, explicitly telling it not to search again so the loop terminates.
+function formatSearchResultsForModel(query, items) {
+  if (!items.length) {
+    return `[Web search for "${query}" returned no results from DuckDuckGo. Answer using your own knowledge — mention that a live search came up empty if that's relevant to the answer. Do not search again.]`;
+  }
+  const lines = items.map((it, i) => `${i + 1}. ${it.title} — ${it.snippet} (${it.url})`);
+  return `[Web search results for "${query}"]\n${lines.join('\n')}\n\nUsing the results above, answer the user's original question normally in plain text. Do not output JSON or search again.`;
+}
+
+// Dedupe-and-append for the source chips shown under a message. Accepts
+// plain {url, title} objects (DuckDuckGo results already come in this shape).
+function mergeSources(existing, incoming) {
+  const list = existing.slice();
+  for (const s of incoming || []) {
+    if (!s?.url || list.some(x => x.url === s.url)) continue;
+    list.push({ url: s.url, title: s.title || s.url });
+  }
+  return list;
+}
+
+function renderSourcesHtml(sources) {
+  if (!sources || !sources.length) return '';
+  const chips = sources.map(s => {
+    const url = escapeHtml(s.url);
+    const title = escapeHtml(s.title || s.url);
+    return `<a class="msg-source-chip" href="${url}" target="_blank" rel="noopener noreferrer" title="${url}">${title}</a>`;
+  }).join('');
+  return `<div class="msg-sources"><span class="msg-sources-label">🔎 Web sources</span><div class="msg-source-chips">${chips}</div></div>`;
+}
+
 window.copyCode = function(btn) {
   const code = btn.closest('pre').querySelector('code');
   navigator.clipboard.writeText(code.innerText).then(() => {
@@ -455,7 +552,9 @@ function appendMessageEl(msg) {
   const regenIcon = msg.role === 'assistant' ? `<button class="msg-action-btn" onclick="regenerateFrom('${msg.id}')" title="Regenerate">${regenSvg()}</button>` : '';
   const delIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2m4 5v6m-4-6v6"/></svg>`;
 
-  const renderedContent = msg.role === 'assistant' ? renderMarkdown(msg.content) : `<p>${escapeHtml(msg.content).replace(/\n/g,'<br>')}</p>`;
+  const renderedContent = msg.role === 'assistant'
+    ? renderMarkdown(msg.content) + renderSourcesHtml(msg.sources)
+    : `<p>${escapeHtml(msg.content).replace(/\n/g,'<br>')}</p>`;
 
   el.innerHTML = `
     <div class="msg-avatar">${avatarContent}</div>
@@ -550,9 +649,14 @@ async function sendRequest() {
   setStatus('loading', 'Generating…');
 
   // Build message history for API
+  const webSearchEnabled = state.settings.runtime === 'openrouter' && state.settings.webSearch;
   const messages = [];
-  if (state.settings.systemPrompt.trim()) {
-    messages.push({ role: 'system', content: state.settings.systemPrompt.trim() });
+  let sysPrompt = state.settings.systemPrompt.trim();
+  if (webSearchEnabled) {
+    sysPrompt = (sysPrompt ? sysPrompt + '\n\n' : '') + WEB_SEARCH_INSTRUCTIONS;
+  }
+  if (sysPrompt) {
+    messages.push({ role: 'system', content: sysPrompt });
   }
   chat.messages.forEach(m => messages.push({ role: m.role, content: m.content }));
 
@@ -588,11 +692,15 @@ async function sendRequest() {
 
   const contentEl = msgEl.querySelector('.msg-content');
 
-  try {
+  // Runs exactly one completion request (streaming or not) against whichever
+  // runtime is active, rendering tokens into contentEl as they arrive, and
+  // resolves with the full response text. Used directly for a normal reply,
+  // and called a second time with search results appended when the model
+  // asks to search (see the loop below).
+  async function runOneCompletion(msgsForThisCall) {
     let url, payload;
-    
+
     if (state.settings.runtime === 'openai' || state.settings.runtime === 'openrouter') {
-      url = `${state.settings.serverUrl.replace(/\/$/, '')}/chat/completions`;
       if (state.settings.runtime === 'openrouter') {
         url = 'https://openrouter.ai/api/v1/chat/completions';
       } else {
@@ -600,7 +708,7 @@ async function sendRequest() {
       }
       payload = {
         model: state.settings.model,
-        messages,
+        messages: msgsForThisCall,
         stream: state.settings.stream,
         temperature: state.settings.temperature,
       };
@@ -608,7 +716,7 @@ async function sendRequest() {
       url = `${state.settings.serverUrl.replace(/\/$/, '')}/api/chat`;
       payload = {
         model: state.settings.model,
-        messages,
+        messages: msgsForThisCall,
         stream: state.settings.stream,
         options: {
           temperature: state.settings.temperature,
@@ -634,7 +742,20 @@ async function sendRequest() {
       throw new Error(`Server error ${response.status}: ${err.slice(0,200)}`);
     }
 
-    let fullText = '';
+    let text = '';
+
+    // While Web Search is on, a reply that *starts* with '{' might be the
+    // model's search-request JSON rather than a real answer — render a
+    // "searching" placeholder instead of flashing raw JSON at the user until
+    // we know which one it is.
+    const renderLive = () => {
+      if (webSearchEnabled && text.trim().startsWith('{')) {
+        contentEl.innerHTML = `<div class="thinking-dots"><span></span><span></span><span></span></div>`;
+      } else {
+        contentEl.innerHTML = renderMarkdown(text) + '<span class="typing-cursor"></span>';
+      }
+      if (state.settings.autoScroll) scrollToBottom();
+    };
 
     if (state.settings.stream) {
       const reader = response.body.getReader();
@@ -651,7 +772,7 @@ async function sendRequest() {
         for (const line of lines) {
           const tLine = line.trim();
           if (!tLine) continue;
-          
+
           if (state.settings.runtime === 'openai' || state.settings.runtime === 'openrouter') {
             // OpenAI/OpenRouter SSE format
             if (tLine.startsWith('data: ')) {
@@ -661,9 +782,8 @@ async function sendRequest() {
                 const data = JSON.parse(dataStr);
                 const chunk = data.choices?.[0]?.delta?.content || '';
                 if (chunk) {
-                  fullText += chunk;
-                  contentEl.innerHTML = renderMarkdown(fullText) + '<span class="typing-cursor"></span>';
-                  if (state.settings.autoScroll) scrollToBottom();
+                  text += chunk;
+                  renderLive();
                 }
               } catch(pe) {
                 // Silent fail on parse errors
@@ -674,9 +794,8 @@ async function sendRequest() {
             try {
               const data = JSON.parse(tLine);
               if (data.message?.content) {
-                fullText += data.message.content;
-                contentEl.innerHTML = renderMarkdown(fullText) + '<span class="typing-cursor"></span>';
-                if (state.settings.autoScroll) scrollToBottom();
+                text += data.message.content;
+                renderLive();
               }
               if (data.done && data.eval_count) {
                 state.totalTokens += (data.prompt_eval_count || 0) + (data.eval_count || 0);
@@ -691,22 +810,52 @@ async function sendRequest() {
     } else {
       const data = await response.json();
       if (state.settings.runtime === 'openai' || state.settings.runtime === 'openrouter') {
-        fullText = data.choices?.[0]?.message?.content || '';
+        text = data.choices?.[0]?.message?.content || '';
         if (data.usage?.total_tokens) {
           state.totalTokens += data.usage.total_tokens;
           updateTokenCounter();
         }
       } else {
-        fullText = data.message?.content || '';
+        text = data.message?.content || '';
         if (data.eval_count) {
           state.totalTokens += (data.prompt_eval_count || 0) + (data.eval_count || 0);
           updateTokenCounter();
         }
       }
+      renderLive();
     }
 
-    contentEl.innerHTML = renderMarkdown(fullText);
+    return text;
+  }
+
+  try {
+    let callMessages = messages;
+    let fullText = '';
+    let sources = [];
+    const maxSearches = 2; // hard cap so a stubborn model can't loop forever
+
+    for (let searchCount = 0; ; searchCount++) {
+      fullText = await runOneCompletion(callMessages);
+
+      const query = webSearchEnabled ? extractSearchQuery(fullText) : null;
+      if (!query || searchCount >= maxSearches) break;
+
+      contentEl.innerHTML = `<div class="search-status">🔎 Searching the web for “${escapeHtml(query)}”…</div>`;
+      if (state.settings.autoScroll) scrollToBottom();
+
+      const results = await duckDuckGoSearch(query);
+      sources = mergeSources(sources, results.map(r => ({ url: r.url, title: r.title })));
+
+      callMessages = [
+        ...callMessages,
+        { role: 'assistant', content: fullText },
+        { role: 'user', content: formatSearchResultsForModel(query, results) },
+      ];
+    }
+
+    contentEl.innerHTML = renderMarkdown(fullText) + renderSourcesHtml(sources);
     assistantMsg.content = fullText;
+    assistantMsg.sources = sources;
     assistantMsg.timestamp = Date.now();
 
     // Re-highlight
@@ -910,6 +1059,7 @@ function openSettings() {
   els.autoScrollToggle.checked = state.settings.autoScroll;
   els.soundToggle.checked      = state.settings.sound;
   if (els.apiKey) els.apiKey.value = state.settings.apiKey || '';
+  if (els.webSearchToggle) els.webSearchToggle.checked = !!state.settings.webSearch;
 
   document.querySelectorAll('.theme-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.theme === state.settings.theme);
@@ -926,6 +1076,7 @@ function openSettings() {
       }
     });
     updateServerUrlHint(state.settings.runtime);
+    updateWebSearchVisibility(state.settings.runtime);
   }
 
   // Sync personality presets
@@ -953,6 +1104,12 @@ function updateServerBadge(url) {
 
 function updateServerUrlHint(runtime) {
   updateServerBadge(els.serverUrl?.value || '');
+}
+
+// Web search is an OpenRouter-only plugin — hide the toggle for other runtimes
+function updateWebSearchVisibility(runtime) {
+  if (!els.webSearchGroup) return;
+  els.webSearchGroup.style.display = runtime === 'openrouter' ? '' : 'none';
 }
 
 // Wire up server quick select buttons
@@ -1005,6 +1162,7 @@ function saveSettingsFromModal() {
   state.settings.autoScroll   = els.autoScrollToggle.checked;
   state.settings.sound        = els.soundToggle.checked;
   if (els.apiKey) state.settings.apiKey = els.apiKey.value.trim();
+  if (els.webSearchToggle) state.settings.webSearch = els.webSearchToggle.checked;
 
   const activeTheme = document.querySelector('.theme-btn.active')?.dataset.theme || 'dark';
   state.settings.theme = activeTheme;
@@ -1036,6 +1194,7 @@ function resetSettings() {
     serverUrl: 'http://localhost:11434', runtime: 'ollama', model: 'gemma4:e2b',
     systemPrompt: 'You are Prefrontal, a helpful, honest, and harmless AI assistant. You are running entirely locally on the user\'s device with complete privacy. Be concise, clear, and friendly.',
     temperature: 0.7, numCtx: 8192, stream: true, autoScroll: true, sound: false, sendMode: 'enter', theme: 'dark',
+    webSearch: false,
   };
   Object.assign(state.settings, defaults);
   saveSettings();
@@ -1131,6 +1290,7 @@ function bindEvents() {
       const rt = btn.dataset.runtime;
       if (rt) {
         updateServerUrlHint(rt);
+        updateWebSearchVisibility(rt);
         if (rt === 'openrouter') {
           els.serverUrl.value = 'https://openrouter.ai/api/v1';
         } else if (rt === 'openai' && els.serverUrl.value === 'http://localhost:11434') {

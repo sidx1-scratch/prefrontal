@@ -25,7 +25,7 @@
 ![Offline](https://img.shields.io/badge/100%25-Offline-success)
 [![Prefrontal CI (Stable + Cross Platform)](https://github.com/sidx1-scratch/prefrontal/actions/workflows/ci.yml/badge.svg)](https://github.com/sidx1-scratch/prefrontal/actions/workflows/ci.yml)
 [![Auto Release + GitHub Packages](https://github.com/sidx1-scratch/prefrontal/actions/workflows/npm-publish-github-packages.yml/badge.svg)](https://github.com/sidx1-scratch/prefrontal/actions/workflows/npm-publish-github-packages.yml)
-[![pages-build-deployment](https://github.com/sidx1-scratch/prefrontal/actions/workflows/pages/pages-build-deployment/badge.svg)](https://github.com/sidx1-scratch/prefrontal/actions/workflows/pages/pages-build-deployment)
+
 
 **100% Offline · No Ads · Your Data Stays on Your Device**
 
@@ -100,7 +100,8 @@ Done — no GPU or model download required.
 Still in Settings, flip the **Web Search** toggle (it only appears when Runtime is set to OpenRouter). The model can then pull in live DuckDuckGo results before answering, with any sources it used shown as clickable chips under its reply. See [Web Search](#-web-search-openrouter-only) below.
 
 > [!NOTE]
-> the duckduckgo instant answer api only knows more known things so if you for example tell it to search up the prefrontal repo it wont find it because instant answer doesn't know about it.
+> the duckduckgo instant answer api only knows more known things so if you for example tell it to search up the prefrontal repo it wont find it because instant answer doesn't know about it. also when it searches up something it looks like this: <img width="449" height="136" alt="image" src="https://github.com/user-attachments/assets/ed4e4914-459e-43bd-8c45-ea6d578634d7" />
+
 ---
 
 ### 🖥️ Fully Offline: Ollama *(no API key, your data never leaves your machine)*

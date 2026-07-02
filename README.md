@@ -13,7 +13,6 @@
 </tr>
 </table>
 
-<sub>↔️ scroll sideways if a row overflows your screen</sub>
 
 </p>
 
@@ -98,6 +97,8 @@ Done — no GPU or model download required.
 **Optional: turn on Web Search**
 Still in Settings, flip the **Web Search** toggle (it only appears when Runtime is set to OpenRouter). The model can then pull in live DuckDuckGo results before answering, with any sources it used shown as clickable chips under its reply. See [Web Search](#-web-search-openrouter-only) below.
 
+> [!NOTE]
+> the duckduckgo instant answer api only knows more known things so if you for example tell it to search up the prefrontal repo it wont find it because instant answer doesn't know about it.
 ---
 
 ### 🖥️ Fully Offline: Ollama *(no API key, your data never leaves your machine)*

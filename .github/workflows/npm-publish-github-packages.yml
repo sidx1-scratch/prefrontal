@@ -36,7 +36,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Bump version (patch)
-        run: npm version patch -m "NOO! NOT VERSION %s"
+        run: npm version patch -m "%s is probably stable (no guarantees)"
 
       - name: Push commit + tags
         run: git push origin main --follow-tags

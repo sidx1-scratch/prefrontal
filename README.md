@@ -136,7 +136,9 @@ Four ways to get Prefrontal running locally — pick whichever fits how you work
 |---|---|---|
 | 📥 **Download a Release** | don't want to install or touch git at all | ❌ No |
 | ⚡ **Quick Install Script** | want a one-line install with no git and no extra repo clutter | ❌ No |
+| 📦 **Install from npm** | want a simple global install from npm | ❌ No |
 | 🧬 **Clone & Run** | are comfortable with git and want to stay on the latest commit | ✅ Yes |
+| 🌍 **GitHub Packages (Recommended)** | want to install once and run from anywhere without keeping a source folder around | ✅ Yes (login only) |
 | 🌍 **GitHub Packages** | want to install once and run from anywhere without keeping a source folder around | ✅ Yes (login only) |
 
 ### Option 1: Download a Release *(no Git required)*
@@ -184,7 +186,28 @@ curl -fsSL https://raw.githubusercontent.com/sidx1-scratch/prefrontal/refs/heads
 > Windows users: the install script requires a shell that supports bash — Git Bash (installed alongside Git for Windows) works well. If you'd rather not install that, the Download a Release, Clone & Run, and GitHub Packages options all work natively on Windows without it.
 
 
-### Option 3: Clone & Run *(quickest if you're comfortable with git)*
+### Option 3: Install from npm
+
+Install Prefrontal directly from npm.
+
+```bash
+npm i -g @sidx1scr-apps/prefrontal
+```
+
+Run it with:
+
+```bash
+prefrontal
+```
+
+> [!TIP]
+> Update later with:
+>
+> ```bash
+> npm update -g @sidx1scr-apps/prefrontal
+> ```
+
+### Option 4: Clone & Run *(quickest if you're comfortable with git)*
 
 No authentication needed — just clone and go. Best if you want to poke around the source, track updates as they land, or contribute back.
 
@@ -200,7 +223,7 @@ A local web server starts and the app opens automatically at `http://localhost:3
 > [!TIP]
 > To update later, run `git pull` from inside the `prefrontal` folder, then `npm install` again in case dependencies changed.
 
-### Option 4: Install via GitHub Packages
+### Option 5: Install via GitHub Packages
 
 More setup upfront, but once installed you can run Prefrontal from anywhere on your machine without keeping the source folder around.
 

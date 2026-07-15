@@ -182,7 +182,7 @@ curl -fsSL https://raw.githubusercontent.com/sidx1-scratch/prefrontal/refs/heads
 > [!TIP]
 > To update later, just re-run the same command — it'll re-fetch the latest versions of the required files into the same folder.
 
-> [!TIP]
+> [!NOTE]
 > Windows users: the install script requires a shell that supports bash — Git Bash (installed alongside Git for Windows) works well. If you'd rather not install that, the Download a Release, Clone & Run, and GitHub Packages options all work natively on Windows without it.
 
 

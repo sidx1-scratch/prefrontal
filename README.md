@@ -139,7 +139,7 @@ Four ways to get Prefrontal running locally — pick whichever fits how you work
 | 📦 **Install from npm** | want a simple global install from npm | ❌ No |
 | 🧬 **Clone & Run** | are comfortable with git and want to stay on the latest commit | ✅ Yes |
 | 🌍 **GitHub Packages (Recommended)** | want to install once and run from anywhere without keeping a source folder around | ✅ Yes (login only) |
-| 🌍 **GitHub Packages** | want to install once and run from anywhere without keeping a source folder around | ✅ Yes (login only) |
+
 
 ### Option 1: Download a Release *(no Git required)*
 

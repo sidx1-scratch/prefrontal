@@ -209,7 +209,7 @@ prefrontal
 > and run with:
 >
 > ```bash
->npm explore @sidx1-scratch/prefrontal -- npm start
+>npm explore @sidx1scr-apps/prefrontal -- npm start
 >```
 
 ### Option 4: Clone & Run *(quickest if you're comfortable with git)*

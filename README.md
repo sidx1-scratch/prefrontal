@@ -206,6 +206,11 @@ prefrontal
 > ```bash
 > npm update -g @sidx1scr-apps/prefrontal
 > ```
+> and run with:
+>
+> ```bash
+>npm explore @sidx1-scratch/prefrontal -- npm start
+>```
 
 ### Option 4: Clone & Run *(quickest if you're comfortable with git)*
 

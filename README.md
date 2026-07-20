@@ -194,12 +194,6 @@ Install Prefrontal directly from npm.
 npm i -g @sidx1scr-apps/prefrontal
 ```
 
-Run it with:
-
-```bash
-prefrontal
-```
-
 > [!TIP]
 > Update later with:
 >

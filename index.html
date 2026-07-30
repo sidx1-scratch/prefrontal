@@ -257,6 +257,19 @@
           <p class="setting-hint">Required for OpenRouter and commercial OpenAI-compatible providers (Groq, Anthropic, etc). Get a free OpenRouter key at <a href="https://openrouter.com/keys" target="_blank" style="color:var(--accent-color);text-decoration:underline">openrouter.com/keys</a>. Stored locally.</p>
         </div>
 
+        <div class="setting-group" id="webSearchGroup" style="display:none">
+          <div class="toggle-row">
+            <div>
+              <label class="setting-label" style="margin-bottom:2px">Web Search</label>
+              <p class="setting-hint" style="margin-top:0">Lets the model search DuckDuckGo before answering when it decides it needs to. Only available on OpenRouter — local/offline runtimes can't reach the internet. Adds a short instruction to the system prompt and runs searches from your browser; no extra API cost beyond the normal per-token price.</p>
+            </div>
+            <label class="toggle">
+              <input type="checkbox" id="webSearchToggle" />
+              <span class="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
         <div class="setting-group">
           <label class="setting-label">Model</label>
           <div class="model-select-row">

@@ -314,6 +314,283 @@ function escapeHtml(t) {
   return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 }
 
+// ── IMAGE GENERATION ─────────────────────────────────────────────
+// Keywords that indicate a model is an image-generation model
+const IMAGE_GEN_MODEL_PATTERNS = [
+  /dall[-_]?e/i, /flux/i, /sdxl/i, /stable[-_]?diff/i, /imagen/i,
+  /midjourney/i, /playground/i, /juggernaut/i, /dreamshaper/i,
+  /realvis/i, /animagine/i, /waifu/i, /latent/i, /diffusion/i,
+];
+
+function isImageGenModel(modelName) {
+  if (!modelName) return false;
+  return IMAGE_GEN_MODEL_PATTERNS.some(p => p.test(modelName));
+}
+
+// Extract base64 data-URI images embedded in markdown text
+// Returns array of { src, altText }
+function extractInlineImages(text) {
+  const results = [];
+  // Match markdown image syntax with data URI
+  const mdRe = /!\[([^\]]*)\]\((data:image\/[^)]+)\)/g;
+  let m;
+  while ((m = mdRe.exec(text)) !== null) {
+    results.push({ src: m[2], altText: m[1] || 'Generated image' });
+  }
+  // Match bare base64 strings that look like images (>500 chars of base64)
+  const b64Re = /(?:^|\s)((?:[A-Za-z0-9+/]{4}){50,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?)/gm;
+  while ((m = b64Re.exec(text)) !== null) {
+    // Try to detect PNG/JPEG by magic bytes decoded from base64
+    const candidate = m[1].trim();
+    try {
+      const bytes = atob(candidate.slice(0, 16));
+      const isPng = bytes.charCodeAt(0) === 0x89 && bytes.charCodeAt(1) === 0x50;
+      const isJpg = bytes.charCodeAt(0) === 0xFF && bytes.charCodeAt(1) === 0xD8;
+      const isWebP = bytes.slice(8, 12) === 'WEBP';
+      if (isPng || isJpg || isWebP) {
+        const mime = isPng ? 'image/png' : isJpg ? 'image/jpeg' : 'image/webp';
+        results.push({ src: `data:${mime};base64,${candidate}`, altText: 'Generated image' });
+      }
+    } catch(e) { /* not valid base64, skip */ }
+  }
+  return results;
+}
+
+// Remove inline base64 image markdown from text so it isn't double-rendered
+function stripInlineImages(text) {
+  return text.replace(/!\[([^\]]*)\]\(data:image\/[^)]+\)/g, '').trim();
+}
+
+// Build a rich image card HTML for a given array of image src strings
+function buildImageCardHtml(images, msgId) {
+  if (!images || images.length === 0) return '';
+  return images.map((img, i) => {
+    const idx = `${msgId}-img-${i}`;
+    return `
+    <div class="img-gen-card" id="${idx}-card">
+      <div class="img-gen-frame">
+        <img class="img-gen-img" id="${idx}" src="${img.src}" alt="${escapeHtml(img.altText || 'Generated image')}" loading="lazy" />
+        <div class="img-gen-overlay">
+          <button class="img-dl-btn" onclick="downloadGeneratedImage('${idx}')" title="Download image">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Download
+          </button>
+          <button class="img-copy-btn" onclick="copyGeneratedImage('${idx}')" title="Copy image">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:16px;height:16px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>
+            Copy
+          </button>
+        </div>
+      </div>
+      <div class="img-gen-meta">
+        <span class="img-gen-badge">🖼️ AI Generated</span>
+        <span class="img-gen-size" id="${idx}-size">Loading…</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// Download image via Canvas API (gives us full OS-level 2D rendering control,
+// format conversion, and metadata embedding via canvas.toBlob)
+window.downloadGeneratedImage = function(imgId) {
+  const img = document.getElementById(imgId);
+  if (!img) return;
+
+  const canvas = document.createElement('canvas');
+  // Use the natural resolution of the image
+  canvas.width  = img.naturalWidth  || img.width  || 1024;
+  canvas.height = img.naturalHeight || img.height || 1024;
+
+  const ctx = canvas.getContext('2d');
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+  canvas.toBlob(blob => {
+    if (!blob) { toast('Could not export image', 'error'); return; }
+    const url = URL.createObjectURL(blob);
+    const a   = document.createElement('a');
+    const ts  = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
+    a.href     = url;
+    a.download = `prefrontal-image-${ts}.png`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast('Image downloaded!', 'success');
+  }, 'image/png');
+};
+
+// Copy image to clipboard via Canvas API + Clipboard API
+window.copyGeneratedImage = async function(imgId) {
+  const img = document.getElementById(imgId);
+  if (!img) return;
+  try {
+    const canvas = document.createElement('canvas');
+    canvas.width  = img.naturalWidth  || img.width  || 1024;
+    canvas.height = img.naturalHeight || img.height || 1024;
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
+    await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+    toast('Image copied to clipboard!', 'success');
+  } catch(e) {
+    toast('Clipboard copy failed — try downloading instead', 'warn');
+  }
+};
+
+// After an image loads, populate its natural size label
+function attachImgSizeLabels(container) {
+  container.querySelectorAll('.img-gen-img').forEach(img => {
+    const sizeEl = document.getElementById(img.id + '-size');
+    if (!sizeEl) return;
+    const update = () => {
+      if (img.naturalWidth) sizeEl.textContent = `${img.naturalWidth} × ${img.naturalHeight}px`;
+    };
+    if (img.complete) update();
+    else img.addEventListener('load', update);
+  });
+}
+
+// ── IMAGE GENERATION API CALL ────────────────────────────────────
+async function sendImageGenerationRequest(prompt) {
+  const chat = state.chats[state.activeChatId];
+  if (!chat || state.isGenerating) return;
+
+  state.isGenerating = true;
+  state.abortController = new AbortController();
+  setSendingState(true);
+  setStatus('loading', 'Generating image…');
+
+  // Create assistant message placeholder
+  const assistantMsg = {
+    id: uid(), role: 'assistant', content: '', images: [], timestamp: Date.now()
+  };
+  chat.messages.push(assistantMsg);
+
+  const msgEl = document.createElement('div');
+  msgEl.className = 'message assistant';
+  msgEl.dataset.id = assistantMsg.id;
+  const avatarId = assistantMsg.id.slice(-4);
+  msgEl.innerHTML = `
+    <div class="msg-avatar">
+      <svg viewBox="0 0 36 36" fill="none" style="width:20px;height:20px"><circle cx="18" cy="18" r="18" fill="url(#ag${avatarId})"/><path d="M24 14h-5.5a2.5 2.5 0 000 5H21a2.5 2.5 0 010 5h-6" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/><defs><linearGradient id="ag${avatarId}" x1="0" y1="0" x2="36" y2="36"><stop offset="0%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#4f46e5"/></linearGradient></defs></svg>
+    </div>
+    <div class="msg-bubble">
+      <div class="msg-content"><div class="img-gen-loading"><span class="img-gen-spinner"></span>Generating image…</div></div>
+      <div class="msg-meta"><span class="msg-time">${fmtTime(assistantMsg.timestamp)}</span></div>
+    </div>`;
+  els.messagesWrapper.appendChild(msgEl);
+
+  const stopWrapper = document.createElement('div');
+  stopWrapper.className = 'stop-btn-wrapper';
+  stopWrapper.innerHTML = `<button class="stop-btn visible" id="stopGenBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="1"/></svg> Stop</button>`;
+  els.messagesWrapper.appendChild(stopWrapper);
+  $('stopGenBtn')?.addEventListener('click', () => state.abortController?.abort());
+  scrollToBottom();
+
+  const contentEl = msgEl.querySelector('.msg-content');
+
+  try {
+    let imageSrcs = [];
+
+    if (state.settings.runtime === 'ollama') {
+      // Ollama /api/generate — some models return base64 in the response text
+      const url = `${state.settings.serverUrl.replace(/\/$/, '')}/api/generate`;
+      const payload = {
+        model: state.settings.model,
+        prompt: prompt,
+        stream: false,
+      };
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+        signal: state.abortController.signal,
+      });
+      if (!res.ok) throw new Error(`Server error ${res.status}: ${await res.text()}`);
+      const data = await res.json();
+      const responseText = data.response || '';
+      // Try extracting inline images from the response
+      const found = extractInlineImages(responseText);
+      if (found.length > 0) {
+        imageSrcs = found.map(f => ({ src: f.src, altText: prompt }));
+        assistantMsg.content = stripInlineImages(responseText);
+      } else {
+        // Fallback: show the text response
+        assistantMsg.content = responseText;
+      }
+    } else {
+      // OpenAI-compatible: /v1/images/generations
+      const baseUrl = state.settings.runtime === 'openrouter'
+        ? 'https://openrouter.ai/api/v1'
+        : state.settings.serverUrl.replace(/\/$/, '');
+      const url = `${baseUrl}/images/generations`;
+      const headers = { 'Content-Type': 'application/json' };
+      if (state.settings.apiKey) headers['Authorization'] = `Bearer ${state.settings.apiKey}`;
+      const payload = {
+        model: state.settings.model,
+        prompt: prompt,
+        n: 1,
+        response_format: 'b64_json',
+        size: '1024x1024',
+      };
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+        signal: state.abortController.signal,
+      });
+      if (!res.ok) throw new Error(`Server error ${res.status}: ${await res.text()}`);
+      const data = await res.json();
+      // OpenAI returns data[].b64_json or data[].url
+      imageSrcs = (data.data || []).map(item => ({
+        src: item.b64_json ? `data:image/png;base64,${item.b64_json}` : item.url,
+        altText: item.revised_prompt || prompt,
+      }));
+      assistantMsg.content = '';
+    }
+
+    assistantMsg.images = imageSrcs;
+    assistantMsg.timestamp = Date.now();
+
+    if (imageSrcs.length > 0) {
+      const cardHtml = buildImageCardHtml(imageSrcs, assistantMsg.id);
+      const textHtml = assistantMsg.content ? renderMarkdown(assistantMsg.content) : '';
+      contentEl.innerHTML = textHtml + cardHtml;
+      attachImgSizeLabels(contentEl);
+    } else if (assistantMsg.content) {
+      contentEl.innerHTML = renderMarkdown(assistantMsg.content);
+    } else {
+      contentEl.innerHTML = `<em style="color:var(--text-muted);font-size:13px">No image was returned by the model.</em>`;
+    }
+
+    playSound(440, 0.12);
+    setStatus('online', `Image generated · ${state.settings.model}`);
+
+  } catch(err) {
+    if (err.name === 'AbortError') {
+      contentEl.innerHTML = `<em style="color:var(--text-muted);font-size:12px">⏹ Generation stopped</em>`;
+      assistantMsg.content = '[Generation stopped]';
+      toast('Generation stopped', 'info');
+    } else {
+      const errMsg = err.message || String(err);
+      contentEl.innerHTML = `<div style="color:#f87171;font-size:13.5px;line-height:1.6"><strong>⚠️ Error</strong><br>${escapeHtml(errMsg)}</div>`;
+      assistantMsg.content = `[Error: ${errMsg}]`;
+      setStatus('error', errMsg.slice(0, 80));
+      toast(errMsg, 'error', 5000);
+    }
+  } finally {
+    stopWrapper.remove();
+    const metaEl = msgEl.querySelector('.msg-meta');
+    metaEl.innerHTML = `
+      <span class="msg-time">${fmtTime(assistantMsg.timestamp)}</span>
+      <div class="msg-actions">
+        <button class="msg-action-btn" onclick="deleteMessage('${assistantMsg.id}')" title="Delete"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2m4 5v6m-4-6v6"/></svg></button>
+      </div>`;
+    state.isGenerating = false;
+    setSendingState(false);
+    chat.updated = Date.now();
+    saveChats();
+    renderChatList();
+    scrollToBottom();
+  }
+}
+
 // ── WEB SEARCH (prompt-driven, DuckDuckGo Instant Answer API) ──────
 // Prefrontal does NOT use OpenRouter's built-in search plugin. Instead, when
 // Web Search is on, the model is told (via a system-prompt addendum) that it
@@ -544,17 +821,27 @@ function appendMessageEl(msg) {
   el.className = `message ${msg.role}`;
   el.dataset.id = msg.id;
 
+  // Image-gen messages use a purple gradient avatar
+  const hasImages = msg.images && msg.images.length > 0;
+  const avatarGradStart = hasImages ? '#7c3aed' : '#10a37f';
+  const avatarGradEnd   = hasImages ? '#4f46e5' : '#0d8965';
+
   const avatarContent = msg.role === 'user'
     ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:17px;height:17px;color:#fff"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`
-    : `<svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:20px;height:20px"><circle cx="18" cy="18" r="18" fill="url(#ag${msg.id?.slice(-4)||'x'})"/><path d="M24 14h-5.5a2.5 2.5 0 000 5H21a2.5 2.5 0 010 5h-6" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/><defs><linearGradient id="ag${msg.id?.slice(-4)||'x'}" x1="0" y1="0" x2="36" y2="36"><stop offset="0%" stop-color="#10a37f"/><stop offset="100%" stop-color="#0d8965"/></linearGradient></defs></svg>`;
+    : `<svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:20px;height:20px"><circle cx="18" cy="18" r="18" fill="url(#ag${msg.id?.slice(-4)||'x'})"/><path d="M24 14h-5.5a2.5 2.5 0 000 5H21a2.5 2.5 0 010 5h-6" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/><defs><linearGradient id="ag${msg.id?.slice(-4)||'x'}" x1="0" y1="0" x2="36" y2="36"><stop offset="0%" stop-color="${avatarGradStart}"/><stop offset="100%" stop-color="${avatarGradEnd}"/></linearGradient></defs></svg>`;
 
   const copyIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`;
-  const regenIcon = msg.role === 'assistant' ? `<button class="msg-action-btn" onclick="regenerateFrom('${msg.id}')" title="Regenerate">${regenSvg()}</button>` : '';
+  const regenIcon = msg.role === 'assistant' && !hasImages ? `<button class="msg-action-btn" onclick="regenerateFrom('${msg.id}')" title="Regenerate">${regenSvg()}</button>` : '';
   const delIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2m4 5v6m-4-6v6"/></svg>`;
 
-  const renderedContent = msg.role === 'assistant'
-    ? renderMarkdown(msg.content) + renderSourcesHtml(msg.sources)
-    : `<p>${escapeHtml(msg.content).replace(/\n/g,'<br>')}</p>`;
+  let renderedContent;
+  if (msg.role === 'assistant') {
+    const textHtml = msg.content ? renderMarkdown(msg.content) + renderSourcesHtml(msg.sources) : '';
+    const imgHtml  = hasImages ? buildImageCardHtml(msg.images, msg.id) : '';
+    renderedContent = textHtml + imgHtml;
+  } else {
+    renderedContent = `<p>${escapeHtml(msg.content).replace(/\n/g,'<br>')}</p>`;
+  }
 
   el.innerHTML = `
     <div class="msg-avatar">${avatarContent}</div>
@@ -563,7 +850,7 @@ function appendMessageEl(msg) {
       <div class="msg-meta">
         <span class="msg-time">${fmtTime(msg.timestamp)}</span>
         <div class="msg-actions">
-          <button class="msg-action-btn" onclick="copyMsgContent('${msg.id}')" title="Copy">${copyIcon}</button>
+          ${!hasImages ? `<button class="msg-action-btn" onclick="copyMsgContent('${msg.id}')" title="Copy">${copyIcon}</button>` : ''}
           ${regenIcon}
           <button class="msg-action-btn" onclick="deleteMessage('${msg.id}')" title="Delete">${delIcon}</button>
         </div>
@@ -571,6 +858,8 @@ function appendMessageEl(msg) {
     </div>`;
 
   els.messagesWrapper.appendChild(el);
+  // Attach size labels for any images
+  if (hasImages) attachImgSizeLabels(el);
   return el;
 }
 
@@ -636,7 +925,13 @@ async function sendMessage(content) {
 
   saveChats();
   updateTokenCounter();
-  await sendRequest();
+
+  // Route to image generation if current model is an image-gen model
+  if (isImageGenModel(state.settings.model)) {
+    await sendImageGenerationRequest(content.trim());
+  } else {
+    await sendRequest();
+  }
 }
 
 async function sendRequest() {
@@ -853,12 +1148,23 @@ async function sendRequest() {
       ];
     }
 
-    contentEl.innerHTML = renderMarkdown(fullText) + renderSourcesHtml(sources);
-    assistantMsg.content = fullText;
-    assistantMsg.sources = sources;
+    // Also detect any base64 inline images in the text response
+    const inlineImgs = extractInlineImages(fullText);
+    if (inlineImgs.length > 0) {
+      assistantMsg.images = inlineImgs.map(f => ({ src: f.src, altText: f.altText }));
+      assistantMsg.content = stripInlineImages(fullText);
+      const textHtml = assistantMsg.content ? renderMarkdown(assistantMsg.content) + renderSourcesHtml(sources) : '';
+      const imgHtml  = buildImageCardHtml(assistantMsg.images, assistantMsg.id);
+      contentEl.innerHTML = textHtml + imgHtml;
+      attachImgSizeLabels(contentEl);
+    } else {
+      contentEl.innerHTML = renderMarkdown(fullText) + renderSourcesHtml(sources);
+      assistantMsg.content = fullText;
+      assistantMsg.sources = sources;
+    }
     assistantMsg.timestamp = Date.now();
 
-    // Re-highlight
+    // Re-highlight code blocks
     contentEl.querySelectorAll('pre code').forEach(el => {
       try { hljs.highlightElement(el); } catch(e) {}
     });

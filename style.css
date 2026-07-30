@@ -611,6 +611,28 @@ body { display: flex; position: relative; background: transparent; z-index: 0; f
   color: var(--text-primary);
 }
 
+/* Web search sources (OpenRouter 'web' plugin citations) */
+.msg-sources {
+  margin-top: 12px; padding-top: 10px;
+  border-top: 1px dashed var(--border);
+}
+.msg-sources-label {
+  display: block; font-size: 11px; font-weight: 600;
+  color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em;
+  margin-bottom: 6px;
+}
+.msg-source-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.msg-source-chip {
+  display: inline-block; max-width: 220px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 12px; line-height: 1.4;
+  padding: 4px 10px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--border);
+  color: var(--accent) !important; text-decoration: none !important;
+  transition: background var(--transition), border-color var(--transition);
+}
+.msg-source-chip:hover { background: var(--surface-hover, var(--surface)); border-color: var(--accent); }
+
 /* Msg meta & actions */
 .msg-meta {
   display: flex; align-items: center; justify-content: space-between;
@@ -645,6 +667,14 @@ body { display: flex; position: relative; background: transparent; z-index: 0; f
 .thinking-dots span:nth-child(2) { animation-delay: 0.15s; }
 .thinking-dots span:nth-child(3) { animation-delay: 0.3s; }
 @keyframes dotBounce { 0%,100%{transform:translateY(0);opacity:0.35} 50%{transform:translateY(-4px);opacity:1} }
+
+/* Web search in progress (prompt-driven DuckDuckGo search) */
+.search-status {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 13.5px; color: var(--text-muted); padding: 6px 0;
+  animation: searchPulse 1.6s ease-in-out infinite;
+}
+@keyframes searchPulse { 0%,100%{opacity:0.6} 50%{opacity:1} }
 
 /* Stop button */
 .stop-btn-wrapper { display: flex; justify-content: center; padding: 8px 0 4px; }

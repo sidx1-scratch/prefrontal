@@ -13,7 +13,6 @@
 </tr>
 </table>
 
-<sub>↔️ scroll sideways if a row overflows your screen</sub>
 
 </p>
 
@@ -25,8 +24,10 @@
 ![License](https://img.shields.io/badge/license-GPLv3-green)
 ![Offline](https://img.shields.io/badge/100%25-Offline-success)
 [![Prefrontal CI (Stable + Cross Platform)](https://github.com/sidx1-scratch/prefrontal/actions/workflows/ci.yml/badge.svg)](https://github.com/sidx1-scratch/prefrontal/actions/workflows/ci.yml)
+[![Auto Release + GitHub Packages](https://github.com/sidx1-scratch/prefrontal/actions/workflows/npm-publish-github-packages.yml/badge.svg)](https://github.com/sidx1-scratch/prefrontal/actions/workflows/npm-publish-github-packages.yml)
 
-**100% Offline · No Ads · No API Keys Required · Your Data Stays on Your Device**
+
+**100% Offline · No Ads · Your Data Stays on Your Device**
 
 Prefrontal is an open-source, privacy-first chat interface for local AI models. It works with **Ollama** (desktop), **Llama.cpp** (any platform, including Android via Termux), and optionally **OpenRouter** if you'd rather skip local setup entirely. No cloud dependency, no telemetry, no subscriptions.
 
@@ -45,6 +46,7 @@ Prefrontal is an open-source, privacy-first chat interface for local AI models. 
 - [Setting Up Your AI Backend](#-setting-up-your-ai-backend)
 - [Personality Presets](#-personality-presets)
 - [Temperature Control](#️-temperature-control)
+- [Web Search (OpenRouter only)](#-web-search-openrouter-only)
 - [Features](#-features)
 - [Keyboard Shortcuts](#️-keyboard-shortcuts)
 - [Privacy & Data](#-privacy--data)
@@ -94,6 +96,12 @@ Open `http://localhost:3000`, go to Settings, and set:
 
 Done — no GPU or model download required.
 
+**Optional: turn on Web Search**
+Still in Settings, flip the **Web Search** toggle (it only appears when Runtime is set to OpenRouter). The model can then pull in live DuckDuckGo results before answering, with any sources it used shown as clickable chips under its reply. See [Web Search](#-web-search-openrouter-only) below.
+
+> [!NOTE]
+> the duckduckgo instant answer api only knows more known things so if you for example tell it to search up the prefrontal repo it wont find it because instant answer doesn't know about it. also when it searches up something it looks like this: <img width="449" height="136" alt="image" src="https://github.com/user-attachments/assets/ed4e4914-459e-43bd-8c45-ea6d578634d7" />
+
 ---
 
 ### 🖥️ Fully Offline: Ollama *(no API key, your data never leaves your machine)*
@@ -122,13 +130,16 @@ Open `http://localhost:3000`, go to Settings, and set:
 
 ## 📦 Installation Options
 
-Three ways to get Prefrontal running locally — pick whichever fits how you work.
+Four ways to get Prefrontal running locally — pick whichever fits how you work.
 
 | Method | Best if you... | Git needed? |
 |---|---|---|
 | 📥 **Download a Release** | don't want to install or touch git at all | ❌ No |
+| ⚡ **Quick Install Script** | want a one-line install with no git and no extra repo clutter | ❌ No |
+| 📦 **Install from npm** | want a simple global install from npm | ❌ No |
 | 🧬 **Clone & Run** | are comfortable with git and want to stay on the latest commit | ✅ Yes |
-| 🌍 **GitHub Packages** | want to install once and run from anywhere without keeping a source folder around | ✅ Yes (login only) |
+| 🌍 **GitHub Packages (Recommended)** | want to install once and run from anywhere without keeping a source folder around | ✅ Yes (login only) |
+
 
 ### Option 1: Download a Release *(no Git required)*
 
@@ -152,7 +163,50 @@ That's the whole process. No `git`, no GitHub account, no cloning.
 > [!TIP]
 > To update later, just download the newest release the same way, extract it to a fresh folder, and run `npm install` again there.
 
-### Option 2: Clone & Run *(quickest if you're comfortable with git)*
+### Option 2: Quick Install Script *(no Git required, fetches only the files the app needs)*
+
+Prefer not to clone the whole repo (including docs, CI workflows, and tests) just to run the app? This one-liner downloads only the runtime-required files — `app.js`, `index.html`, `style.css`, `manifest.json`, `package.json`, `package-lock.json`, and the `vendor/` libraries — straight from GitHub, no `git` involved.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sidx1-scratch/prefrontal/refs/heads/main/install.sh | bash
+cd prefrontal
+npm install && npm start
+```
+
+By default it installs into a `prefrontal` folder in your current directory. To install into a different folder name instead:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/sidx1-scratch/prefrontal/refs/heads/main/install.sh | bash -s -- my-folder-name
+```
+
+> [!TIP]
+> To update later, just re-run the same command — it'll re-fetch the latest versions of the required files into the same folder.
+
+> [!NOTE]
+> Windows users: the install script requires a shell that supports bash — Git Bash (installed alongside Git for Windows) works well. If you'd rather not install that, the Download a Release, Clone & Run, and GitHub Packages options all work natively on Windows without it.
+
+
+### Option 3: Install from npm
+
+Install Prefrontal directly from npm.
+
+```bash
+npm i -g @sidx1scr-apps/prefrontal
+```
+
+> [!TIP]
+> Update later with:
+>
+> ```bash
+> npm update -g @sidx1scr-apps/prefrontal
+> ```
+> and run with:
+>
+> ```bash
+>npm explore @sidx1scr-apps/prefrontal -- npm start
+>```
+
+### Option 4: Clone & Run *(quickest if you're comfortable with git)*
 
 No authentication needed — just clone and go. Best if you want to poke around the source, track updates as they land, or contribute back.
 
@@ -168,7 +222,7 @@ A local web server starts and the app opens automatically at `http://localhost:3
 > [!TIP]
 > To update later, run `git pull` from inside the `prefrontal` folder, then `npm install` again in case dependencies changed.
 
-### Option 3: Install via GitHub Packages
+### Option 5: Install via GitHub Packages
 
 More setup upfront, but once installed you can run Prefrontal from anywhere on your machine without keeping the source folder around.
 
@@ -366,6 +420,23 @@ Temperature controls how random or creative the AI's outputs are.
 
 ---
 
+## 🔎 Web Search (OpenRouter only)
+
+When you're running on **OpenRouter**, Prefrontal can let the model search the live web before it answers — useful for anything newer than the model's training data, or that just needs a source. This isn't OpenRouter's own search plugin; Prefrontal implements it itself, on top of the free [DuckDuckGo Instant Answer API](https://duckduckgo.com/api), so it works with any OpenRouter model, free or paid.
+
+**How to enable it**
+1. Settings → set Runtime to **OpenRouter**.
+2. A new **Web Search** toggle appears (it's hidden for Ollama/Llama.cpp, since those runtimes have no internet access of their own). Flip it on.
+3. Save. That's it — every message you send from then on can trigger a search when the model decides it's useful.
+
+**How it works**
+Turning the toggle on quietly appends a short instruction to the system prompt, telling the model that if it wants to search, it should reply with *only* a small JSON object — `{"search_query": "..."}` — instead of a normal answer. Prefrontal watches for that JSON: if a reply matches it, nothing is shown to you yet (you'll see a "🔎 Searching the web for…" status instead of raw JSON), Prefrontal queries DuckDuckGo directly from your browser, and feeds the results back to the model as a follow-up message so it can write the real answer. Any pages the model drew on come back as clickable source chips underneath the final reply. This whole exchange (search request → DuckDuckGo → real answer) happens automatically within a single one of your messages — capped at two search rounds so a stubborn model can't loop forever — and only the final answer is saved to your chat history.
+
+> [!NOTE]
+> Web search only applies to the OpenRouter runtime and only while the toggle is on. Ollama and Llama.cpp responses are unaffected either way, since local models have no path to the internet. Because this uses DuckDuckGo's free Instant Answer API rather than a full search index, it's strongest for facts, definitions, and well-known topics, and can come back empty for very narrow or breaking-news queries — the model is told to just answer from its own knowledge when that happens. Since this is prompt-based rather than a model-native tool-call feature, it depends on the model actually following the instruction; most capable instruction-tuned models handle it reliably, but very small/free models occasionally ignore it.
+
+---
+
 ## 🎨 Features
 
 | Feature | Details |
@@ -374,6 +445,7 @@ Temperature controls how random or creative the AI's outputs are.
 | 🔄 Streaming | Real-time, token-by-token generation |
 | 🎭 Personality Presets | 4 built-in modes with one click |
 | 🌡️ Temperature Control | Live-sent with every request |
+| 🔎 Web Search | OpenRouter-only: prompt-driven DuckDuckGo search with clickable source citations |
 | 📚 Multi-Backend | OpenRouter (cloud), Ollama, and Llama.cpp over local or LAN |
 | 🌐 LAN & External | Connect to dedicated AI servers on your network |
 | 💾 Multi-Chat | Unlimited saved local conversations |
@@ -447,7 +519,7 @@ If you use the **OpenRouter** runtime instead, your messages are sent to OpenRou
 
 ## 🤝 Contributing
 
-Issues and PRs are welcome at [github.com/sidx1-scratch/prefrontal](https://github.com/sidx1-scratch/prefrontal). If you spot a bug or have a feature idea, open an issue before submitting a large PR so the approach can be discussed first.
+Issues and PRs are welcome at [github.com/sidx1-scratch/prefrontal](https://github.com/sidx1-scratch/prefrontal). If you spot a bug or have a feature idea, open an issue or comment in a discussion before submitting a large PR so the approach can be discussed first.
 
 ### Contribution Rule
 Prefrontal is a zero‑build, zero‑dependency project.

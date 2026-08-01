@@ -100,7 +100,8 @@ Done — no GPU or model download required.
 Still in Settings, flip the **Web Search** toggle (it only appears when Runtime is set to OpenRouter). The model can then pull in live DuckDuckGo results before answering, with any sources it used shown as clickable chips under its reply. See [Web Search](#-web-search-openrouter-only) below.
 
 > [!NOTE]
-> the duckduckgo instant answer api only knows more known things so if you for example tell it to search up the prefrontal repo it wont find it because instant answer doesn't know about it. also when it searches up something it looks like this: <img width="449" height="136" alt="image" src="https://github.com/user-attachments/assets/ed4e4914-459e-43bd-8c45-ea6d578634d7" />
+> the duckduckgo instant answer api only knows more known things so if you for example tell it to search up the prefrontal repo it wont find it because instant answer doesn't know about it. also when it searches up something it looks like this: <img width="800" height="497" alt="ScreencastFrom2026-08-0111-41-15-ezgif com-optimize" src="https://github.com/user-attachments/assets/830edd98-b72f-4517-b38b-539db35ed501" />
+
 
 ---
 

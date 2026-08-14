@@ -36,6 +36,8 @@ jobs:
 
       - name: Verify distributable contents
         run: npm run test:package
+      - name: Run proxy smoke test
+        run: npm run test:proxy
 
       - name: Push commit + tags
         run: git push origin main --follow-tags

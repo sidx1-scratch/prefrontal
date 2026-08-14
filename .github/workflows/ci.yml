@@ -18,6 +18,8 @@ jobs:
         run: npm ci
       - name: Verify distributable contents
         run: npm run test:package
+      - name: Run proxy smoke test
+        run: npm run test:proxy
 
   test:
     strategy:

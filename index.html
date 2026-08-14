@@ -1,4 +1,21 @@
 <!DOCTYPE html>
+<!--
+  Prefrontal — Powered by AI
+  Copyright (C) 2026 sidx1-scratch
+
+  This program is free software: you can redistribute it and/or modify
+  it under the terms of the GNU General Public License as published by
+  the Free Software Foundation, either version 3 of the License, or
+  (at your option) any later version.
+
+  This program is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+  GNU General Public License for more details.
+
+  You should have received a copy of the GNU General Public License
+  along with this program.  If not, see <https://www.gnu.org/licenses/>.
+-->
 <html lang="en">
 
 <head>
@@ -184,14 +201,18 @@
     <footer class="input-area">
       <div class="input-wrapper">
         <div class="input-tools">
-          <button class="tool-btn" id="attachBtn" title="Attach Image (Coming Soon)" disabled>
+          <button class="tool-btn" id="attachBtn" title="Attach file / image (or drag &amp; drop, or paste)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
               stroke-linejoin="round">
               <path
                 d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48" />
             </svg>
           </button>
+          <!-- Hidden file input triggered by attachBtn -->
+          <input type="file" id="attachInput" multiple accept="image/*,text/*,.pdf,.json,.md,.csv,.py,.js,.ts,.html,.css,.txt" style="display:none" />
         </div>
+        <!-- Attachment preview chips -->
+        <div class="attach-preview" id="attachPreview" style="display:none"></div>
         <div class="textarea-container">
           <textarea id="userInput" placeholder="Message AI…" rows="1" maxlength="32000" autocomplete="off"
             spellcheck="true"></textarea>
@@ -226,11 +247,9 @@
 
         <div class="setting-group">
           <label class="setting-label">AI Runtime</label>
-          <div class="shortcut-options" id="runtimeOptions" style="margin-bottom: 12px;">
-            <button class="shortcut-btn active" data-runtime="ollama">Ollama</button>
-            <button class="shortcut-btn" data-runtime="openai">Llama.cpp / OpenAI</button>
-            <button class="shortcut-btn" data-runtime="openrouter">OpenRouter</button>
-          </div>
+          <!-- Buttons are dynamically built by buildRuntimeButtons() in app.js -->
+          <div class="shortcut-options" id="runtimeOptions" style="margin-bottom: 12px; flex-wrap: wrap;"></div>
+          <p class="setting-hint">Choose your AI backend. The Server URL below is auto-filled with the default for each runtime but you can override it.</p>
         </div>
 
         <div class="setting-group">
@@ -240,10 +259,13 @@
           <input type="text" class="setting-input" id="serverUrl" value="http://localhost:11434"
             placeholder="http://localhost:11434" />
           <div class="server-quick-btns" id="serverQuickBtns">
-            <button class="server-quick-btn" data-url="http://localhost:11434" data-runtime="ollama">🏠 Local Ollama</button>
-            <button class="server-quick-btn" data-url="http://localhost:8080/v1" data-runtime="openai">🏠 Local Llama.cpp</button>
-            <button class="server-quick-btn" data-url="https://openrouter.ai/api/v1" data-runtime="openrouter">🌐 OpenRouter</button>
-            <button class="server-quick-btn" data-url="http://192.168.1.X:11434" data-type="lan">📡 LAN Ollama</button>
+            <button class="server-quick-btn" data-url="http://localhost:11434"         data-runtime="ollama">🏠 Local Ollama</button>
+            <button class="server-quick-btn" data-url="http://localhost:8080/v1"        data-runtime="openai">🏠 Local Llama.cpp</button>
+            <button class="server-quick-btn" data-url="https://openrouter.ai/api/v1"   data-runtime="openrouter">🌐 OpenRouter</button>
+            <button class="server-quick-btn" data-url="https://api.openai.com/v1"       data-runtime="openai_direct">🤖 OpenAI</button>
+            <button class="server-quick-btn" data-url="https://api.groq.com/openai/v1" data-runtime="groq">⚡ Groq</button>
+            <button class="server-quick-btn" data-url="https://api.together.xyz/v1"    data-runtime="together">🔗 Together AI</button>
+            <button class="server-quick-btn" data-url="http://192.168.1.X:11434"       data-runtime="ollama">📡 LAN Ollama</button>
           </div>
           <p class="setting-hint" id="serverUrlHint">
             Enter any server URL — local, LAN (e.g. <code>http://192.168.1.50:11434</code>), or a remote server.
@@ -252,16 +274,17 @@
         </div>
 
         <div class="setting-group">
-          <label class="setting-label">API Key <span style="font-size:10.5px;font-weight:normal;color:var(--text-muted)">(Optional)</span></label>
-          <input type="password" class="setting-input" id="apiKey" autocomplete="off" placeholder="sk-... (required for OpenRouter)" />
-          <p class="setting-hint">Required for OpenRouter and commercial OpenAI-compatible providers (Groq, Anthropic, etc). Get a free OpenRouter key at <a href="https://openrouter.com/keys" target="_blank" style="color:var(--accent-color);text-decoration:underline">openrouter.com/keys</a>. Stored locally.</p>
+          <label class="setting-label">API Key <span style="font-size:10.5px;font-weight:normal;color:var(--text-muted)">(Optional — use .env for security)</span></label>
+          <div id="serverKeyStatus" style="display:none;font-size:12px;margin-bottom:6px;"></div>
+          <input type="password" class="setting-input" id="apiKey" autocomplete="off" placeholder="sk-... (required for cloud providers)" />
+          <p class="setting-hint">For cloud providers (OpenRouter, Groq, OpenAI, Together AI), enter your API key here, or let the local server proxy use a key from <code>.env</code>. Server-loaded keys are never returned to the browser. Get a free OpenRouter key at <a href="https://openrouter.com/keys" target="_blank" style="color:var(--accent-color);text-decoration:underline">openrouter.com/keys</a>.</p>
         </div>
 
         <div class="setting-group" id="webSearchGroup" style="display:none">
           <div class="toggle-row">
             <div>
               <label class="setting-label" style="margin-bottom:2px">Web Search</label>
-              <p class="setting-hint" style="margin-top:0">Lets the model search DuckDuckGo before answering when it decides it needs to. Only available on OpenRouter — local/offline runtimes can't reach the internet. Adds a short instruction to the system prompt and runs searches from your browser; no extra API cost beyond the normal per-token price.</p>
+              <p class="setting-hint" style="margin-top:0">Lets the model search DuckDuckGo before answering when it needs to. Available on all OpenAI-compatible backends (OpenRouter, Groq, OpenAI, Together AI, Llama.cpp, etc.) — not available for local Ollama since it can't reach the internet. Adds a short instruction to the system prompt; no extra API cost.</p>
             </div>
             <label class="toggle">
               <input type="checkbox" id="webSearchToggle" />

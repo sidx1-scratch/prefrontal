@@ -1,34 +1,51 @@
 #!/usr/bin/env bash
 #
-# install.sh — Installs only the runtime-required files for Prefrontal
+# Prefrontal — Powered by AI
+# Copyright (C) 2026 sidx1-scratch
+#
+# This program is free software: you can redistribute it and/or modify
+# it under the terms of the GNU General Public License as published by
+# the Free Software Foundation, either version 3 of the License, or
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program.  If not, see <https://www.gnu.org/licenses/>.
+#
+# install.sh — Installs the runtime-required files for Prefrontal
 # (https://github.com/sidx1-scratch/prefrontal) into a local "prefrontal" dir.
 #
-# What gets installed (the app actually needs these to run):
-#   app.js, index.html, style.css, manifest.json, package.json,
-#   package-lock.json, and the vendor/ JS+CSS libs it loads at runtime.
+# What gets installed:
+#   app.js, index.html, style.css, manifest.json, server.js, .env.example,
+#   package.json, package-lock.json, and the vendor/ JS+CSS libs it loads.
 #
 # What is intentionally skipped (not needed to run the app):
 #   README.md, LICENSE, .gitattributes, google site-verification file,
 #   docs/ (GitHub Pages site), tests/ and .github/workflows/ (CI only).
-#   These are all marked export-ignore in the repo's own .gitattributes,
-#   confirming they're considered non-essential to the shipped app.
 #
 # Usage:
 #   ./install.sh [target-dir]      (default target-dir: ./prefrontal)
+#   PREFRONTAL_BRANCH=features ./install.sh  # install a non-main branch
 
 set -euo pipefail
 
 REPO="sidx1-scratch/prefrontal"
-BRANCH="main"
+BRANCH="${PREFRONTAL_BRANCH:-main}"
 RAW_BASE="https://raw.githubusercontent.com/${REPO}/${BRANCH}"
 TARGET_DIR="${1:-prefrontal}"
 
-# Files required for the app to actually run, relative to repo root.
+# Files required for the app and its Express launcher.
 REQUIRED_FILES=(
   "app.js"
   "index.html"
   "style.css"
   "manifest.json"
+  "server.js"
+  ".env.example"
   "package.json"
   "package-lock.json"
   "vendor/marked.min.js"
@@ -61,7 +78,9 @@ echo "Done. Installed files:"
 echo ""
 echo "Next steps:"
 echo "  cd ${TARGET_DIR}"
-echo "  npm start          # serves the app at http://localhost:3000"
+echo "  cp .env.example .env  # optional: configure server-side provider keys"
+echo "  npm install"
+echo "  npm start              # serves the app at http://localhost:3000"
 echo ""
 echo "Make sure a local AI backend (Ollama or Llama.cpp) is running,"
 echo "then configure its Server URL in Prefrontal's Settings."

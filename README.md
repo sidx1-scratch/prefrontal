@@ -209,10 +209,10 @@ npm i -g @sidx1scr-apps/prefrontal
 
 ### Option 4: Clone & Run *(quickest if you're comfortable with git)*
 
-No authentication needed — just clone and go. Best if you want to poke around the source, track updates as they land, or contribute back.
+No authentication needed — just clone and go. Best if you want to just get done with git for the day.
 
 ```bash
-git clone https://github.com/sidx1-scratch/prefrontal
+git clone --depth 1 https://github.com/sidx1-scratch/prefrontal
 cd prefrontal
 npm install
 npm start
@@ -220,8 +220,16 @@ npm start
 
 A local web server starts and the app opens automatically at `http://localhost:3000`.
 
-> [!TIP]
-> To update later, run `git pull` from inside the `prefrontal` folder, then `npm install` again in case dependencies changed.
+Or you can just do 
+```bash
+git clone https://github.com/sidx1-scratch/prefrontal.git
+cd prefrontal
+npm install
+npm start
+```
+If you want to contribute or just want the full Git history.
+[!TIP]
+To update later, run git pull from inside the prefrontal folder. If the dependencies changed, run npm install afterward just in case.
 
 ### Option 5: Install via GitHub Packages
 

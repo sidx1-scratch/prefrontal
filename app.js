@@ -15,22 +15,148 @@
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
-   Local AI via Ollama  |  100% Offline  |  No Ads
+   Local AI via Ollama | Cloud via OpenRouter/Groq/Together/OpenAI | 100% Private
    ═══════════════════════════════════════════════════════════════ */
 
 'use strict';
 
-// ── STATE ────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────
+   § 1  RUNTIME CONFIGURATION
+   All supported AI backends and their defaults.
+   ───────────────────────────────────────────────────────────────── */
+
+/**
+ * All supported runtime backends.
+ *
+ * Fields:
+ *   label        — display name in UI
+ *   defaultUrl   — default API base URL (users can override)
+ *   openaiApi    — true if backend uses OpenAI-compatible /v1/chat/completions
+ *   supportsWebSearch  — true if web-search feature is available
+ *   supportsFileUpload — true if backend accepts multimodal (image/file) inputs
+ *   requiresKey  — true if API key is mandatory
+ *   keyEnvName   — matching .env var name for server-side key
+ *   defaultModel — default model string for this backend
+ */
+const RUNTIMES = {
+  ollama: {
+    label: 'Ollama',
+    defaultUrl: 'http://localhost:11434',
+    openaiApi: false,
+    supportsWebSearch: false,
+    supportsFileUpload: true,   // Ollama multimodal (llava, etc.)
+    requiresKey: false,
+    keyEnvName: '',
+    defaultModel: 'gemma4:e2b',
+  },
+  openai: {
+    label: 'Llama.cpp / OpenAI-compatible',
+    defaultUrl: 'http://localhost:8080/v1',
+    openaiApi: true,
+    supportsWebSearch: true,
+    supportsFileUpload: true,
+    requiresKey: false,
+    keyEnvName: '',
+    defaultModel: 'gpt-4o',
+  },
+  openrouter: {
+    label: 'OpenRouter',
+    defaultUrl: 'https://openrouter.ai/api/v1',
+    openaiApi: true,
+    supportsWebSearch: true,
+    supportsFileUpload: true,
+    requiresKey: true,
+    keyEnvName: 'openrouterKey',
+    defaultModel: 'mistralai/mistral-7b-instruct:free',
+  },
+  openai_direct: {
+    label: 'OpenAI',
+    defaultUrl: 'https://api.openai.com/v1',
+    openaiApi: true,
+    supportsWebSearch: true,
+    supportsFileUpload: true,
+    requiresKey: true,
+    keyEnvName: 'openaiKey',
+    defaultModel: 'gpt-4o',
+  },
+  groq: {
+    label: 'Groq',
+    defaultUrl: 'https://api.groq.com/openai/v1',
+    openaiApi: true,
+    supportsWebSearch: true,
+    supportsFileUpload: true,
+    requiresKey: true,
+    keyEnvName: 'groqKey',
+    defaultModel: 'llama-3.3-70b-versatile',
+  },
+  together: {
+    label: 'Together AI',
+    defaultUrl: 'https://api.together.xyz/v1',
+    openaiApi: true,
+    supportsWebSearch: true,
+    supportsFileUpload: true,
+    requiresKey: true,
+    keyEnvName: 'togetherKey',
+    defaultModel: 'meta-llama/Llama-3-70b-chat-hf',
+  },
+};
+
+/** Returns the RUNTIMES config for the currently active runtime. */
+const currentRuntime = () => RUNTIMES[state.settings.runtime] || RUNTIMES.ollama;
+
+/** True when the active runtime uses the OpenAI /v1/chat/completions API. */
+const isOpenAIRuntime = () => currentRuntime().openaiApi;
+
+/** Resolved API base URL: user override in settings > runtime default. */
+function getApiBaseUrl() {
+  const rt = state.settings.runtime;
+  const rdef = RUNTIMES[rt];
+  if (!rdef) return state.settings.serverUrl;
+  // For cloud runtimes the URL is fixed (but still overridable)
+  return state.settings.serverUrl || rdef.defaultUrl;
+}
+
+/** Resolved API key for the current runtime:
+ *  1. server-side key loaded from .env  (via /api/config)
+ *  2. manual key typed in Settings UI   (state.settings.apiKey)
+ */
+function getApiKey() {
+  const envKey = state.settings.runtime && serverKeys[RUNTIMES[state.settings.runtime]?.keyEnvName];
+  return envKey || state.settings.apiKey || '';
+}
+
+// Keys fetched from the server's .env file at startup
+const serverKeys = {};
+
+async function loadServerKeys() {
+  try {
+    const res = await fetch('/api/config');
+    if (!res.ok) return;
+    const data = await res.json();
+    Object.assign(serverKeys, data);
+    // If server provided keys, notify the user once
+    if (data.hasServerKeys) {
+      console.info('[Prefrontal] API keys loaded from server .env — no need to enter them manually.');
+    }
+  } catch {
+    // Running without the proxy server (plain static file serving) — keys must be entered manually
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   § 2  STATE
+   ───────────────────────────────────────────────────────────────── */
+
 const state = {
-  chats: {},               // { id: { id, title, messages:[], created, updated } }
+  chats:    {},       // { id: { id, title, messages:[], created, updated } }
   activeChatId: null,
-  isGenerating: false,
+  isGenerating:   false,
   abortController: null,
   settings: {
     serverUrl:    'http://localhost:11434',
-    runtime:      'ollama', // 'ollama' | 'openai' | 'openrouter'
+    runtime:      'ollama',
     model:        'gemma4:e2b',
-    systemPrompt: 'You are Prefrontal, a helpful, honest, and harmless AI assistant. You are running entirely locally on the user\'s device with complete privacy. Be concise, clear, and friendly.',
+    systemPrompt: "You are Prefrontal, a helpful, honest, and harmless AI assistant. You are running entirely locally on the user's device with complete privacy. Be concise, clear, and friendly.",
     temperature:  0.7,
     numCtx:       8192,
     stream:       true,
@@ -38,35 +164,41 @@ const state = {
     sound:        false,
     sendMode:     'enter',  // 'enter' | 'shift'
     theme:        'dark',
-    apiKey:       '',
-    personality:  'balanced', // tracks which preset is active
-    webSearch:    false, // OpenRouter-only: enable the ':web' search plugin
+    apiKey:       '',       // manual override (when no .env key)
+    personality:  'balanced',
+    webSearch:    false,
   },
   totalTokens: 0,
-  profile: null,  // { deviceId, displayName, avatar, createdAt }
+  profile:     null,   // { deviceId, displayName, avatar, createdAt }
+
+  // Pending file attachments for the next message
+  attachments: [],     // [{ name, type, dataUrl, base64 }]
 };
 
-// ── PERSONALITY PRESETS ───────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────
+   § 3  PERSONALITY PRESETS
+   ───────────────────────────────────────────────────────────────── */
+
 const PERSONALITY_PRESETS = {
   balanced: {
     name: 'Balanced',
     temperature: 0.7,
-    systemPrompt: 'You are Prefrontal, a helpful, honest, and harmless AI assistant. You are running entirely locally on the user\'s device with complete privacy. Be concise, clear, and friendly.',
+    systemPrompt: "You are Prefrontal, a helpful, honest, and harmless AI assistant. You are running entirely locally on the user's device with complete privacy. Be concise, clear, and friendly.",
   },
   creative: {
     name: 'Creative',
     temperature: 1.1,
-    systemPrompt: 'You are Prefrontal, a creative and imaginative AI muse running entirely locally on the user\'s device. Be expressive, playful, and explore ideas with flair. Use vivid language, metaphors, and creative thinking.',
+    systemPrompt: "You are Prefrontal, a creative and imaginative AI muse running entirely locally on the user's device. Be expressive, playful, and explore ideas with flair. Use vivid language, metaphors, and creative thinking.",
   },
   precise: {
     name: 'Precise',
     temperature: 0.2,
-    systemPrompt: 'You are Prefrontal, a precise and factual AI assistant running entirely locally. Be concise, direct, and accurate. Avoid filler, preamble, and unnecessary repetition. Answer exactly what is asked.',
+    systemPrompt: "You are Prefrontal, a precise and factual AI assistant running entirely locally. Be concise, direct, and accurate. Avoid filler, preamble, and unnecessary repetition. Answer exactly what is asked.",
   },
   developer: {
     name: 'Developer',
     temperature: 0.3,
-    systemPrompt: 'You are Prefrontal, a senior software engineer and code review AI running entirely locally. Prioritize working, idiomatic code above all else. Be terse and technical — skip hand-holding.',
+    systemPrompt: "You are Prefrontal, a senior software engineer and code review AI running entirely locally. Prioritize working, idiomatic code above all else. Be terse and technical — skip hand-holding.",
   },
   custom: {
     name: 'Custom',
@@ -78,9 +210,9 @@ const PERSONALITY_PRESETS = {
 function applyPersonalityPreset(preset, { updateUI = false } = {}) {
   const p = PERSONALITY_PRESETS[preset];
   if (!p || preset === 'custom') return;
-  state.settings.personality   = preset;
-  state.settings.temperature   = p.temperature;
-  state.settings.systemPrompt  = p.systemPrompt;
+  state.settings.personality  = preset;
+  state.settings.temperature  = p.temperature;
+  state.settings.systemPrompt = p.systemPrompt;
   if (updateUI) {
     if (els.tempSlider)   { els.tempSlider.value = p.temperature; }
     if (els.tempDisplay)  { els.tempDisplay.textContent = p.temperature.toFixed(2); }
@@ -92,11 +224,9 @@ function applyPersonalityPreset(preset, { updateUI = false } = {}) {
 }
 
 function syncPersonalityUI(preset) {
-  // Settings modal preset buttons
   document.querySelectorAll('.personality-preset-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.preset === preset)
   );
-  // Welcome screen pills
   document.querySelectorAll('.personality-pill').forEach(b =>
     b.classList.toggle('active', b.dataset.preset === preset)
   );
@@ -112,9 +242,14 @@ function getTempBadgeLabel(val) {
   return 'Wild';
 }
 
-// ── DOM REFS ──────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────
+   § 4  DOM REFS
+   ───────────────────────────────────────────────────────────────── */
+
 const $ = id => document.getElementById(id);
+
 const els = {
+  // Layout
   sidebar:          $('sidebar'),
   sidebarToggle:    $('sidebarToggle'),
   newChatBtn:       $('newChatBtn'),
@@ -134,10 +269,16 @@ const els = {
   statusDot:        $('statusDot'),
   statusText:       $('statusText'),
   tokenCounter:     $('tokenCounter'),
+
+  // Input
   userInput:        $('userInput'),
   charCount:        $('charCount'),
   sendBtn:          $('sendBtn'),
   attachBtn:        $('attachBtn'),
+  attachInput:      $('attachInput'),
+  attachPreview:    $('attachPreview'),
+
+  // Settings modal
   settingsOverlay:  $('settingsOverlay'),
   closeSettings:    $('closeSettings'),
   serverUrl:        $('serverUrl'),
@@ -162,79 +303,72 @@ const els = {
   apiKey:           $('apiKey'),
   webSearchGroup:   $('webSearchGroup'),
   webSearchToggle:  $('webSearchToggle'),
+  fileUploadGroup:  $('fileUploadGroup'),
   resetSettingsBtn: $('resetSettingsBtn'),
   saveSettingsBtn:  $('saveSettingsBtn'),
+  serverKeyStatus:  $('serverKeyStatus'),
+
+  // Confirm dialog
   confirmOverlay:   $('confirmOverlay'),
   confirmTitle:     $('confirmTitle'),
   confirmMessage:   $('confirmMessage'),
   confirmCancel:    $('confirmCancel'),
   confirmOk:        $('confirmOk'),
+
+  // Toast
   toastContainer:   $('toastContainer'),
+
   // Profile
-  profileCard:         $('profileCard'),
-  openProfileBtn:      $('openProfileBtn'),
-  sidebarAvatar:       $('sidebarAvatar'),
-  sidebarName:         $('sidebarName'),
-  sidebarId:           $('sidebarId'),
-  // Setup modal
-  setupOverlay:        $('setupOverlay'),
-  deviceIdPreview:     $('deviceIdPreview'),
-  avatarGrid:          $('avatarGrid'),
-  setupName:           $('setupName'),
-  completeSetupBtn:    $('completeSetupBtn'),
-  // Profile modal
-  profileOverlay:      $('profileOverlay'),
-  closeProfileBtn:     $('closeProfileBtn'),
-  cancelProfileBtn:    $('cancelProfileBtn'),
-  saveProfileBtn:      $('saveProfileBtn'),
-  profilePreviewAvatar:$('profilePreviewAvatar'),
-  profilePreviewName:  $('profilePreviewName'),
-  profilePreviewMeta:  $('profilePreviewMeta'),
-  profileAvatarGrid:   $('profileAvatarGrid'),
-  profileNameInput:    $('profileNameInput'),
-  profileDeviceId:     $('profileDeviceId'),
-  profileCreatedAt:    $('profileCreatedAt'),
-  exportProfileBtn:    $('exportProfileBtn'),
-  importProfileInput:  $('importProfileInput'),
+  profileCard:          $('profileCard'),
+  openProfileBtn:       $('openProfileBtn'),
+  sidebarAvatar:        $('sidebarAvatar'),
+  sidebarName:          $('sidebarName'),
+  sidebarId:            $('sidebarId'),
+  setupOverlay:         $('setupOverlay'),
+  deviceIdPreview:      $('deviceIdPreview'),
+  avatarGrid:           $('avatarGrid'),
+  setupName:            $('setupName'),
+  completeSetupBtn:     $('completeSetupBtn'),
+  profileOverlay:       $('profileOverlay'),
+  closeProfileBtn:      $('closeProfileBtn'),
+  cancelProfileBtn:     $('cancelProfileBtn'),
+  saveProfileBtn:       $('saveProfileBtn'),
+  profilePreviewAvatar: $('profilePreviewAvatar'),
+  profilePreviewName:   $('profilePreviewName'),
+  profilePreviewMeta:   $('profilePreviewMeta'),
+  profileAvatarGrid:    $('profileAvatarGrid'),
+  profileNameInput:     $('profileNameInput'),
+  profileDeviceId:      $('profileDeviceId'),
+  profileCreatedAt:     $('profileCreatedAt'),
+  exportProfileBtn:     $('exportProfileBtn'),
+  importProfileInput:   $('importProfileInput'),
 };
 
-// ── PERSISTENCE ───────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────
+   § 5  PERSISTENCE
+   ───────────────────────────────────────────────────────────────── */
+
 const STORAGE_KEY_CHATS    = 'prefrontal_chats';
 const STORAGE_KEY_SETTINGS = 'prefrontal_settings';
 const STORAGE_KEY_PROFILE  = 'prefrontal_profile';
 
-function saveChats() {
-  try { localStorage.setItem(STORAGE_KEY_CHATS, JSON.stringify(state.chats)); } catch(e) {}
-}
-function loadChats() {
+function saveChats()    { try { localStorage.setItem(STORAGE_KEY_CHATS,    JSON.stringify(state.chats));    } catch(e) {} }
+function loadChats()    { try { const r = localStorage.getItem(STORAGE_KEY_CHATS);    if (r) state.chats   = JSON.parse(r); } catch(e) { state.chats = {}; } }
+function saveSettings() { try { localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(state.settings)); } catch(e) {} }
+function loadSettings() { try { const r = localStorage.getItem(STORAGE_KEY_SETTINGS); if (r) Object.assign(state.settings, JSON.parse(r)); } catch(e) {} }
+function saveProfile()  { try { localStorage.setItem(STORAGE_KEY_PROFILE,  JSON.stringify(state.profile));  } catch(e) {} }
+function loadProfile()  {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY_CHATS);
-    if (raw) state.chats = JSON.parse(raw);
-  } catch(e) { state.chats = {}; }
-}
-function saveSettings() {
-  try { localStorage.setItem(STORAGE_KEY_SETTINGS, JSON.stringify(state.settings)); } catch(e) {}
-}
-function loadSettings() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_SETTINGS);
-    if (raw) Object.assign(state.settings, JSON.parse(raw));
-  } catch(e) {}
-}
-
-// ── PROFILE PERSISTENCE ───────────────────────────────────────────
-function saveProfile() {
-  try { localStorage.setItem(STORAGE_KEY_PROFILE, JSON.stringify(state.profile)); } catch(e) {}
-}
-function loadProfile() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_PROFILE);
-    if (raw) { state.profile = JSON.parse(raw); return true; }
+    const r = localStorage.getItem(STORAGE_KEY_PROFILE);
+    if (r) { state.profile = JSON.parse(r); return true; }
   } catch(e) {}
   return false;
 }
 
-// Generate a UUID v4
+/* ─────────────────────────────────────────────────────────────────
+   § 6  UTILITIES
+   ───────────────────────────────────────────────────────────────── */
+
 function generateUUID() {
   return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => {
     const r = Math.random() * 16 | 0;
@@ -242,26 +376,37 @@ function generateUUID() {
   });
 }
 
-// Short version for display: first 8 chars
 const shortId = id => id ? id.slice(0, 8).toUpperCase() : '—';
-
-// ── ID & TIMESTAMP ────────────────────────────────────────────────
-const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
-const fmtTime = ts => new Date(ts).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'});
+const uid     = () => `${Date.now()}-${Math.random().toString(36).slice(2,8)}`;
+const fmtTime = ts => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 const fmtDate = ts => {
   const d = new Date(ts), now = new Date();
   if (d.toDateString() === now.toDateString()) return 'Today';
-  const yesterday = new Date(); yesterday.setDate(yesterday.getDate()-1);
+  const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
   if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
-  return d.toLocaleDateString([], {month:'short',day:'numeric'});
+  return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 };
 
-// ── TOAST ─────────────────────────────────────────────────────────
+function escapeHtml(t) {
+  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function download(filename, content) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], { type: 'text/plain' }));
+  a.download = filename;
+  a.click();
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   § 7  TOAST & CONFIRM
+   ───────────────────────────────────────────────────────────────── */
+
 function toast(msg, type = 'info', duration = 3000) {
-  const icons = { success:'✅', error:'❌', info:'ℹ️', warn:'⚠️' };
+  const icons = { success: '✅', error: '❌', info: 'ℹ️', warn: '⚠️' };
   const el = document.createElement('div');
   el.className = `toast ${type}`;
-  el.innerHTML = `<span class="toast-icon">${icons[type]||'ℹ️'}</span><span>${msg}</span>`;
+  el.innerHTML = `<span class="toast-icon">${icons[type] || 'ℹ️'}</span><span>${msg}</span>`;
   els.toastContainer.appendChild(el);
   setTimeout(() => {
     el.style.animation = 'toastOut 0.3s ease forwards';
@@ -269,13 +414,12 @@ function toast(msg, type = 'info', duration = 3000) {
   }, duration);
 }
 
-// ── CONFIRM DIALOG ────────────────────────────────────────────────
 function confirm(title, message) {
   return new Promise(resolve => {
-    els.confirmTitle.textContent = title;
+    els.confirmTitle.textContent   = title;
     els.confirmMessage.textContent = message;
     els.confirmOverlay.classList.add('open');
-    const ok = () => { cleanup(); resolve(true); };
+    const ok     = () => { cleanup(); resolve(true);  };
     const cancel = () => { cleanup(); resolve(false); };
     function cleanup() {
       els.confirmOverlay.classList.remove('open');
@@ -287,12 +431,15 @@ function confirm(title, message) {
   });
 }
 
-// ── SOUND ─────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────
+   § 8  SOUND
+   ───────────────────────────────────────────────────────────────── */
+
 function playSound(freq = 440, duration = 0.08) {
   if (!state.settings.sound) return;
   try {
-    const ctx = new (window.AudioContext || window.webkitAudioContext)();
-    const osc = ctx.createOscillator();
+    const ctx  = new (window.AudioContext || window.webkitAudioContext)();
+    const osc  = ctx.createOscillator();
     const gain = ctx.createGain();
     osc.connect(gain); gain.connect(ctx.destination);
     osc.frequency.value = freq; osc.type = 'sine';
@@ -302,13 +449,16 @@ function playSound(freq = 440, duration = 0.08) {
   } catch(e) {}
 }
 
-// ── MARKDOWN RENDERING ────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────
+   § 9  MARKDOWN RENDERING
+   ───────────────────────────────────────────────────────────────── */
+
 function renderMarkdown(text) {
   if (typeof marked === 'undefined') return escapeHtml(text);
   marked.setOptions({
     highlight: (code, lang) => {
       if (hljs && lang && hljs.getLanguage(lang)) {
-        try { return hljs.highlight(code, {language: lang}).value; } catch(e) {}
+        try { return hljs.highlight(code, { language: lang }).value; } catch(e) {}
       }
       return hljs ? hljs.highlightAuto(code).value : escapeHtml(code);
     },
@@ -317,7 +467,7 @@ function renderMarkdown(text) {
 
   let html = marked.parse(text);
 
-  // Add copy buttons and headers to code blocks
+  // Add copy buttons + language badge to code blocks
   html = html.replace(/<pre><code(?: class="language-([^"]+)")?>([\s\S]*?)<\/code><\/pre>/g, (_, lang, code) => {
     const l = lang || 'text';
     return `<div class="code-block-wrapper"><pre><div class="code-header"><span class="code-lang">${l}</span><button class="copy-code-btn" onclick="copyCode(this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M16 3H7a2 2 0 00-2 2v13a2 2 0 002 2h9a2 2 0 002-2V5a2 2 0 00-2-2z"/></svg></button></div><code>${code}</code></pre></div>`;
@@ -325,12 +475,137 @@ function renderMarkdown(text) {
   return html;
 }
 
-function escapeHtml(t) {
-  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+window.copyCode = function(btn) {
+  const code = btn.closest('pre').querySelector('code');
+  navigator.clipboard.writeText(code.innerText).then(() => {
+    btn.classList.add('copied');
+    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><polyline points="20 6 9 17 4 12"/></svg>`;
+    setTimeout(() => {
+      btn.classList.remove('copied');
+      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M16 3H7a2 2 0 00-2 2v13a2 2 0 002 2h9a2 2 0 002-2V5a2 2 0 00-2-2z"/></svg>`;
+    }, 2000);
+  });
+};
+
+/* ─────────────────────────────────────────────────────────────────
+   § 10  FILE ATTACHMENTS
+   Handle image / document attachments that are sent alongside messages.
+   ───────────────────────────────────────────────────────────────── */
+
+/**
+ * Read a File object into a base64 data-URL and push it onto state.attachments.
+ */
+function readFileAsAttachment(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const dataUrl = e.target.result;                  // data:<mime>;base64,<data>
+      const base64  = dataUrl.split(',')[1];
+      const attach  = { name: file.name, type: file.type, dataUrl, base64 };
+      state.attachments.push(attach);
+      resolve(attach);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
-// ── IMAGE GENERATION ─────────────────────────────────────────────
-// Keywords that indicate a model is an image-generation model
+/**
+ * Build the multimodal content array for an OpenAI-style API request.
+ * Combines text with any pending attachments.
+ */
+function buildOpenAIContent(text, attachments) {
+  if (!attachments || attachments.length === 0) {
+    return text;  // Plain string for text-only messages
+  }
+  const parts = [];
+  // Image parts first
+  for (const att of attachments) {
+    if (att.type.startsWith('image/')) {
+      parts.push({
+        type: 'image_url',
+        image_url: { url: att.dataUrl, detail: 'auto' },
+      });
+    } else {
+      // For non-image files, embed as a text block with the file name + base64
+      parts.push({
+        type: 'text',
+        text: `[File: ${att.name}]\n\`\`\`\n${atob(att.base64).slice(0, 8000)}\n\`\`\``,
+      });
+    }
+  }
+  // User text last
+  if (text) {
+    parts.push({ type: 'text', text });
+  }
+  return parts;
+}
+
+/**
+ * Build the images array for Ollama's /api/chat endpoint.
+ * Ollama accepts bare base64 strings (no data-URL prefix) in the `images` array.
+ */
+function buildOllamaImages(attachments) {
+  if (!attachments || attachments.length === 0) return undefined;
+  const images = attachments
+    .filter(a => a.type.startsWith('image/'))
+    .map(a => a.base64);
+  return images.length > 0 ? images : undefined;
+}
+
+/** Render the current attachment preview bar. */
+function renderAttachPreview() {
+  if (!els.attachPreview) return;
+  if (state.attachments.length === 0) {
+    els.attachPreview.innerHTML = '';
+    els.attachPreview.style.display = 'none';
+    return;
+  }
+  els.attachPreview.style.display = 'flex';
+  els.attachPreview.innerHTML = state.attachments.map((att, i) => {
+    const isImage = att.type.startsWith('image/');
+    const thumb   = isImage
+      ? `<img src="${att.dataUrl}" alt="${escapeHtml(att.name)}" class="attach-thumb" />`
+      : `<span class="attach-file-icon">📄</span>`;
+    return `
+      <div class="attach-chip" data-idx="${i}">
+        ${thumb}
+        <span class="attach-chip-name">${escapeHtml(att.name)}</span>
+        <button class="attach-chip-remove" onclick="removeAttachment(${i})" title="Remove">✕</button>
+      </div>`;
+  }).join('');
+}
+
+window.removeAttachment = function(idx) {
+  state.attachments.splice(idx, 1);
+  renderAttachPreview();
+};
+
+/** Render the user message bubble including any attachments. */
+function renderUserMessageContent(msg) {
+  let html = '';
+  if (msg.attachments && msg.attachments.length > 0) {
+    html += `<div class="msg-attachments">`;
+    for (const att of msg.attachments) {
+      if (att.type.startsWith('image/')) {
+        html += `<img src="${att.dataUrl}" alt="${escapeHtml(att.name)}" class="msg-attach-img" onclick="openImgLightbox(this)" />`;
+      } else {
+        html += `<div class="msg-attach-file"><span>📄</span> ${escapeHtml(att.name)}</div>`;
+      }
+    }
+    html += `</div>`;
+  }
+  if (msg.content) {
+    html += `<p>${escapeHtml(msg.content).replace(/\n/g, '<br>')}</p>`;
+  }
+  return html;
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   § 11  IMAGE GENERATION
+   ───────────────────────────────────────────────────────────────── */
+
+// Keywords that indicate an image-generation model
 const IMAGE_GEN_MODEL_PATTERNS = [
   /dall[-_]?e/i, /flux/i, /sdxl/i, /stable[-_]?diff/i, /imagen/i,
   /midjourney/i, /playground/i, /juggernaut/i, /dreamshaper/i,
@@ -342,41 +617,32 @@ function isImageGenModel(modelName) {
   return IMAGE_GEN_MODEL_PATTERNS.some(p => p.test(modelName));
 }
 
-// Extract base64 data-URI images embedded in markdown text
-// Returns array of { src, altText }
 function extractInlineImages(text) {
   const results = [];
-  // Match markdown image syntax with data URI
   const mdRe = /!\[([^\]]*)\]\((data:image\/[^)]+)\)/g;
   let m;
   while ((m = mdRe.exec(text)) !== null) {
     results.push({ src: m[2], altText: m[1] || 'Generated image' });
   }
-  // Match bare base64 strings that look like images (>500 chars of base64)
   const b64Re = /(?:^|\s)((?:[A-Za-z0-9+/]{4}){50,}(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?)/gm;
   while ((m = b64Re.exec(text)) !== null) {
-    // Try to detect PNG/JPEG by magic bytes decoded from base64
     const candidate = m[1].trim();
     try {
       const bytes = atob(candidate.slice(0, 16));
       const isPng = bytes.charCodeAt(0) === 0x89 && bytes.charCodeAt(1) === 0x50;
       const isJpg = bytes.charCodeAt(0) === 0xFF && bytes.charCodeAt(1) === 0xD8;
-      const isWebP = bytes.slice(8, 12) === 'WEBP';
-      if (isPng || isJpg || isWebP) {
-        const mime = isPng ? 'image/png' : isJpg ? 'image/jpeg' : 'image/webp';
-        results.push({ src: `data:${mime};base64,${candidate}`, altText: 'Generated image' });
+      if (isPng || isJpg) {
+        results.push({ src: `data:image/${isPng ? 'png' : 'jpeg'};base64,${candidate}`, altText: 'Generated image' });
       }
-    } catch(e) { /* not valid base64, skip */ }
+    } catch(e) {}
   }
   return results;
 }
 
-// Remove inline base64 image markdown from text so it isn't double-rendered
 function stripInlineImages(text) {
   return text.replace(/!\[([^\]]*)\]\(data:image\/[^)]+\)/g, '').trim();
 }
 
-// Build a rich image card HTML for a given array of image src strings
 function buildImageCardHtml(images, msgId) {
   if (!images || images.length === 0) return '';
   return images.map((img, i) => {
@@ -404,41 +670,32 @@ function buildImageCardHtml(images, msgId) {
   }).join('');
 }
 
-// Download image via Canvas API (gives us full OS-level 2D rendering control,
-// format conversion, and metadata embedding via canvas.toBlob)
 window.downloadGeneratedImage = function(imgId) {
   const img = document.getElementById(imgId);
   if (!img) return;
-
   const canvas = document.createElement('canvas');
-  // Use the natural resolution of the image
-  canvas.width  = img.naturalWidth  || img.width  || 1024;
-  canvas.height = img.naturalHeight || img.height || 1024;
-
-  const ctx = canvas.getContext('2d');
-  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
-
+  canvas.width  = img.naturalWidth  || 1024;
+  canvas.height = img.naturalHeight || 1024;
+  canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
   canvas.toBlob(blob => {
     if (!blob) { toast('Could not export image', 'error'); return; }
     const url = URL.createObjectURL(blob);
     const a   = document.createElement('a');
-    const ts  = new Date().toISOString().replace(/[:.]/g,'-').slice(0,19);
     a.href     = url;
-    a.download = `prefrontal-image-${ts}.png`;
+    a.download = `prefrontal-image-${new Date().toISOString().replace(/[:.]/g,'-').slice(0,19)}.png`;
     a.click();
     URL.revokeObjectURL(url);
     toast('Image downloaded!', 'success');
   }, 'image/png');
 };
 
-// Copy image to clipboard via Canvas API + Clipboard API
 window.copyGeneratedImage = async function(imgId) {
   const img = document.getElementById(imgId);
   if (!img) return;
   try {
     const canvas = document.createElement('canvas');
-    canvas.width  = img.naturalWidth  || img.width  || 1024;
-    canvas.height = img.naturalHeight || img.height || 1024;
+    canvas.width  = img.naturalWidth  || 1024;
+    canvas.height = img.naturalHeight || 1024;
     canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
     const blob = await new Promise(res => canvas.toBlob(res, 'image/png'));
     await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
@@ -448,33 +705,38 @@ window.copyGeneratedImage = async function(imgId) {
   }
 };
 
-// After an image loads, populate its natural size label
 function attachImgSizeLabels(container) {
   container.querySelectorAll('.img-gen-img').forEach(img => {
     const sizeEl = document.getElementById(img.id + '-size');
     if (!sizeEl) return;
-    const update = () => {
-      if (img.naturalWidth) sizeEl.textContent = `${img.naturalWidth} × ${img.naturalHeight}px`;
-    };
-    if (img.complete) update();
-    else img.addEventListener('load', update);
+    const update = () => { if (img.naturalWidth) sizeEl.textContent = `${img.naturalWidth} × ${img.naturalHeight}px`; };
+    if (img.complete) update(); else img.addEventListener('load', update);
   });
 }
 
-// ── IMAGE GENERATION API CALL ────────────────────────────────────
+/** Simple image lightbox */
+window.openImgLightbox = function(imgEl) {
+  const overlay = document.createElement('div');
+  overlay.className = 'lightbox-overlay';
+  overlay.innerHTML = `<div class="lightbox-content"><img src="${imgEl.src}" alt="${imgEl.alt}" /><button class="lightbox-close" onclick="this.closest('.lightbox-overlay').remove()">✕</button></div>`;
+  overlay.addEventListener('click', e => { if (e.target === overlay) overlay.remove(); });
+  document.body.appendChild(overlay);
+};
+
+/* ─────────────────────────────────────────────────────────────────
+   § 12  IMAGE GENERATION REQUEST
+   ───────────────────────────────────────────────────────────────── */
+
 async function sendImageGenerationRequest(prompt) {
   const chat = state.chats[state.activeChatId];
   if (!chat || state.isGenerating) return;
 
-  state.isGenerating = true;
+  state.isGenerating    = true;
   state.abortController = new AbortController();
   setSendingState(true);
   setStatus('loading', 'Generating image…');
 
-  // Create assistant message placeholder
-  const assistantMsg = {
-    id: uid(), role: 'assistant', content: '', images: [], timestamp: Date.now()
-  };
+  const assistantMsg = { id: uid(), role: 'assistant', content: '', images: [], timestamp: Date.now() };
   chat.messages.push(assistantMsg);
 
   const msgEl = document.createElement('div');
@@ -504,63 +766,38 @@ async function sendImageGenerationRequest(prompt) {
     let imageSrcs = [];
 
     if (state.settings.runtime === 'ollama') {
-      // Ollama /api/generate — some models return base64 in the response text
-      const url = `${state.settings.serverUrl.replace(/\/$/, '')}/api/generate`;
-      const payload = {
-        model: state.settings.model,
-        prompt: prompt,
-        stream: false,
-      };
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        signal: state.abortController.signal,
-      });
+      const url     = `${getApiBaseUrl().replace(/\/$/, '')}/api/generate`;
+      const payload = { model: state.settings.model, prompt, stream: false };
+      const res     = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: state.abortController.signal });
       if (!res.ok) throw new Error(`Server error ${res.status}: ${await res.text()}`);
-      const data = await res.json();
+      const data         = await res.json();
       const responseText = data.response || '';
-      // Try extracting inline images from the response
-      const found = extractInlineImages(responseText);
+      const found        = extractInlineImages(responseText);
       if (found.length > 0) {
-        imageSrcs = found.map(f => ({ src: f.src, altText: prompt }));
+        imageSrcs           = found.map(f => ({ src: f.src, altText: prompt }));
         assistantMsg.content = stripInlineImages(responseText);
       } else {
-        // Fallback: show the text response
         assistantMsg.content = responseText;
       }
     } else {
-      // OpenAI-compatible: /v1/images/generations
-      const baseUrl = state.settings.runtime === 'openrouter'
-        ? 'https://openrouter.ai/api/v1'
-        : state.settings.serverUrl.replace(/\/$/, '');
-      const url = `${baseUrl}/images/generations`;
+      // OpenAI-compatible images endpoint
+      const baseUrl = getApiBaseUrl().replace(/\/$/, '');
+      const url     = `${baseUrl}/images/generations`;
       const headers = { 'Content-Type': 'application/json' };
-      if (state.settings.apiKey) headers['Authorization'] = `Bearer ${state.settings.apiKey}`;
-      const payload = {
-        model: state.settings.model,
-        prompt: prompt,
-        n: 1,
-        response_format: 'b64_json',
-        size: '1024x1024',
-      };
-      const res = await fetch(url, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload),
-        signal: state.abortController.signal,
-      });
+      const key     = getApiKey();
+      if (key) headers['Authorization'] = `Bearer ${key}`;
+      const payload = { model: state.settings.model, prompt, n: 1, response_format: 'b64_json', size: '1024x1024' };
+      const res     = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload), signal: state.abortController.signal });
       if (!res.ok) throw new Error(`Server error ${res.status}: ${await res.text()}`);
       const data = await res.json();
-      // OpenAI returns data[].b64_json or data[].url
-      imageSrcs = (data.data || []).map(item => ({
+      imageSrcs   = (data.data || []).map(item => ({
         src: item.b64_json ? `data:image/png;base64,${item.b64_json}` : item.url,
         altText: item.revised_prompt || prompt,
       }));
       assistantMsg.content = '';
     }
 
-    assistantMsg.images = imageSrcs;
+    assistantMsg.images    = imageSrcs;
     assistantMsg.timestamp = Date.now();
 
     if (imageSrcs.length > 0) {
@@ -606,22 +843,15 @@ async function sendImageGenerationRequest(prompt) {
   }
 }
 
-// ── WEB SEARCH (prompt-driven, DuckDuckGo Instant Answer API) ──────
-// Prefrontal does NOT use OpenRouter's built-in search plugin. Instead, when
-// Web Search is on, the model is told (via a system-prompt addendum) that it
-// can request a search by replying with ONLY a small JSON object. sendRequest()
-// detects that JSON, runs the search itself against DuckDuckGo, and feeds the
-// results back to the model as a follow-up message so it can answer normally.
-// This keeps the feature entirely in Prefrontal's hands — it works with the
-// free DuckDuckGo API and needs no extra provider-side capability.
+/* ─────────────────────────────────────────────────────────────────
+   § 13  WEB SEARCH  (DuckDuckGo, prompt-driven)
+   Available on all OpenAI-compatible runtimes (not Ollama — no internet).
+   ───────────────────────────────────────────────────────────────── */
+
 const WEB_SEARCH_INSTRUCTIONS = `You have the ability to search the web when you need current information, facts you're not sure of, or anything that could have changed since your training. To search, reply with ONLY this JSON object and nothing else — no other words, no markdown code fences, no explanation before or after it:
 {"search_query": "your search terms here"}
 The app will run that search and send the results back to you in a follow-up message. Once you have the results, answer the user's original question normally, in plain text, using them. Only search when it would genuinely help — for things you already know, or normal conversation, just answer directly without searching.`;
 
-// Pulls a {"search_query": "..."} request out of a model reply. Tolerates
-// accidental code-fence wrapping even though the prompt asks the model not
-// to use one, since smaller/free models don't always follow instructions
-// exactly. Returns null for anything that isn't a clean search request.
 function extractSearchQuery(text) {
   let t = (text || '').trim();
   t = t.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
@@ -631,56 +861,41 @@ function extractSearchQuery(text) {
     if (obj && typeof obj.search_query === 'string' && obj.search_query.trim()) {
       return obj.search_query.trim();
     }
-  } catch (e) { /* not JSON, not a search request */ }
+  } catch(e) {}
   return null;
 }
 
-// Queries DuckDuckGo's free, keyless Instant Answer API. This is a knowledge-graph
-// style API, not a full search index — it works well for facts, definitions, people,
-// and topics with a Wikipedia-style abstract, but can come back empty for narrower
-// or very current queries. Returns an array of {title, url, snippet}, newest/most
-// relevant first, capped to keep the follow-up prompt small.
 async function duckDuckGoSearch(query) {
   const url = `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1&no_redirect=1`;
   try {
-    const res = await fetch(url);
+    const res  = await fetch(url);
     if (!res.ok) return [];
     const data = await res.json();
     const items = [];
-    if (data.AbstractText) {
-      items.push({ title: data.Heading || query, url: data.AbstractURL || url, snippet: data.AbstractText });
-    }
-    if (data.Answer) {
-      items.push({ title: data.AnswerType || 'Answer', url: data.AbstractURL || url, snippet: data.Answer });
-    }
-    const walkTopics = (topics) => {
+    if (data.AbstractText) items.push({ title: data.Heading || query, url: data.AbstractURL || url, snippet: data.AbstractText });
+    if (data.Answer)       items.push({ title: data.AnswerType || 'Answer', url: data.AbstractURL || url, snippet: data.Answer });
+    const walkTopics = topics => {
       for (const t of topics || []) {
         if (items.length >= 6) return;
         if (t.Topics) { walkTopics(t.Topics); continue; }
-        if (t.Text && t.FirstURL) {
-          items.push({ title: t.Text.split(' - ')[0].slice(0, 90), url: t.FirstURL, snippet: t.Text });
-        }
+        if (t.Text && t.FirstURL) items.push({ title: t.Text.split(' - ')[0].slice(0, 90), url: t.FirstURL, snippet: t.Text });
       }
     };
     walkTopics(data.RelatedTopics);
     return items.slice(0, 6);
-  } catch (e) {
-    return []; // network hiccup or CORS issue — fail quietly, model answers from its own knowledge
+  } catch(e) {
+    return [];
   }
 }
 
-// Turns DuckDuckGo results into the follow-up user-role message sent back to
-// the model, explicitly telling it not to search again so the loop terminates.
 function formatSearchResultsForModel(query, items) {
   if (!items.length) {
-    return `[Web search for "${query}" returned no results from DuckDuckGo. Answer using your own knowledge — mention that a live search came up empty if that's relevant to the answer. Do not search again.]`;
+    return `[Web search for "${query}" returned no results from DuckDuckGo. Answer using your own knowledge — mention that a live search came up empty if that's relevant. Do not search again.]`;
   }
   const lines = items.map((it, i) => `${i + 1}. ${it.title} — ${it.snippet} (${it.url})`);
   return `[Web search results for "${query}"]\n${lines.join('\n')}\n\nUsing the results above, answer the user's original question normally in plain text. Do not output JSON or search again.`;
 }
 
-// Dedupe-and-append for the source chips shown under a message. Accepts
-// plain {url, title} objects (DuckDuckGo results already come in this shape).
 function mergeSources(existing, incoming) {
   const list = existing.slice();
   for (const s of incoming || []) {
@@ -693,26 +908,17 @@ function mergeSources(existing, incoming) {
 function renderSourcesHtml(sources) {
   if (!sources || !sources.length) return '';
   const chips = sources.map(s => {
-    const url = escapeHtml(s.url);
+    const url   = escapeHtml(s.url);
     const title = escapeHtml(s.title || s.url);
     return `<a class="msg-source-chip" href="${url}" target="_blank" rel="noopener noreferrer" title="${url}">${title}</a>`;
   }).join('');
   return `<div class="msg-sources"><span class="msg-sources-label">🔎 Web sources</span><div class="msg-source-chips">${chips}</div></div>`;
 }
 
-window.copyCode = function(btn) {
-  const code = btn.closest('pre').querySelector('code');
-  navigator.clipboard.writeText(code.innerText).then(() => {
-    btn.classList.add('copied');
-    btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><polyline points="20 6 9 17 4 12"/></svg>`;
-    setTimeout(() => {
-      btn.classList.remove('copied');
-      btn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M16 3H7a2 2 0 00-2 2v13a2 2 0 002 2h9a2 2 0 002-2V5a2 2 0 00-2-2z"/></svg>`;
-    }, 2000);
-  });
-};
+/* ─────────────────────────────────────────────────────────────────
+   § 14  CHAT MANAGEMENT
+   ───────────────────────────────────────────────────────────────── */
 
-// ── CHAT MANAGEMENT ───────────────────────────────────────────────
 function createChat() {
   const id = uid();
   state.chats[id] = { id, title: 'New Chat', messages: [], created: Date.now(), updated: Date.now() };
@@ -724,9 +930,7 @@ function deleteChat(id) {
   if (state.activeChatId === id) {
     const remaining = Object.keys(state.chats);
     state.activeChatId = remaining.length > 0 ? remaining[remaining.length - 1] : null;
-    if (!state.activeChatId) {
-      state.activeChatId = createChat();
-    }
+    if (!state.activeChatId) state.activeChatId = createChat();
     renderChat();
   }
   saveChats();
@@ -747,9 +951,8 @@ function autoTitle(id) {
   if (!chat || chat.messages.length === 0) return;
   const first = chat.messages.find(m => m.role === 'user');
   if (!first) return;
-  const raw = first.content.trim().replace(/\n/g,' ');
-  const title = raw.length > 48 ? raw.slice(0, 45) + '…' : raw;
-  chat.title = title;
+  const raw   = first.content.trim().replace(/\n/g, ' ');
+  chat.title  = raw.length > 48 ? raw.slice(0, 45) + '…' : raw;
   chat.updated = Date.now();
 }
 
@@ -759,9 +962,12 @@ function setActiveChat(id) {
   renderChat();
 }
 
-// ── RENDER CHAT LIST ──────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────
+   § 15  RENDER CHAT LIST
+   ───────────────────────────────────────────────────────────────── */
+
 function renderChatList(filter = '') {
-  const ids = Object.keys(state.chats).sort((a,b) => (state.chats[b].updated||0) - (state.chats[a].updated||0));
+  const ids      = Object.keys(state.chats).sort((a, b) => (state.chats[b].updated || 0) - (state.chats[a].updated || 0));
   const filtered = filter ? ids.filter(id => state.chats[id].title.toLowerCase().includes(filter.toLowerCase())) : ids;
 
   if (filtered.length === 0) {
@@ -770,14 +976,15 @@ function renderChatList(filter = '') {
   }
 
   els.chatList.innerHTML = filtered.map(id => {
-    const chat = state.chats[id];
+    const chat   = state.chats[id];
     const active = id === state.activeChatId ? 'active' : '';
-    const icon = chat.messages.length > 0 ? '💬' : '🆕';
+    const icon   = chat.messages.length > 0 ? '💬' : '🆕';
+    const msgs   = chat.messages.filter(m => m.role === 'user').length;
     return `<div class="chat-item ${active}" data-id="${id}" id="chat-item-${id}">
       <div class="chat-item-icon">${icon}</div>
       <div class="chat-item-info">
         <div class="chat-item-title">${escapeHtml(chat.title)}</div>
-        <div class="chat-item-date">${fmtDate(chat.updated||chat.created)} · ${chat.messages.filter(m=>m.role==='user').length} msg${chat.messages.filter(m=>m.role==='user').length!==1?'s':''}</div>
+        <div class="chat-item-date">${fmtDate(chat.updated || chat.created)} · ${msgs} msg${msgs !== 1 ? 's' : ''}</div>
       </div>
       <div class="chat-item-actions">
         <button class="chat-item-action-btn" onclick="promptRename(event,'${id}')" title="Rename">✏️</button>
@@ -787,7 +994,6 @@ function renderChatList(filter = '') {
     </div>`;
   }).join('');
 
-  // Click on chat item
   filtered.forEach(id => {
     const el = document.getElementById(`chat-item-${id}`);
     if (el) el.addEventListener('click', e => {
@@ -798,8 +1004,7 @@ function renderChatList(filter = '') {
 
 window.promptRename = function(e, id) {
   e.stopPropagation();
-  const current = state.chats[id]?.title || '';
-  const name = prompt('Rename conversation:', current);
+  const name = prompt('Rename conversation:', state.chats[id]?.title || '');
   if (name !== null && name.trim()) renameChat(id, name.trim());
 };
 window.promptDelete = async function(e, id) {
@@ -812,23 +1017,24 @@ window.promptExport = function(e, id) {
   exportChat(id);
 };
 
-// ── RENDER CHAT ───────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────
+   § 16  RENDER CHAT & MESSAGE ELS
+   ───────────────────────────────────────────────────────────────── */
+
 function renderChat() {
   const chat = state.chats[state.activeChatId];
   if (!chat) return;
-
-  els.topbarTitle.textContent = chat.title;
+  els.topbarTitle.textContent  = chat.title;
   els.messagesWrapper.innerHTML = '';
-
-  if (chat.messages.length === 0) {
-    els.welcomeScreen.style.display = '';
-    return;
-  }
+  if (chat.messages.length === 0) { els.welcomeScreen.style.display = ''; return; }
   els.welcomeScreen.style.display = 'none';
-
   chat.messages.forEach(msg => appendMessageEl(msg));
   scrollToBottom(false);
   updateTokenCounter();
+}
+
+function regenSvg() {
+  return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1015.85-5.5"/></svg>`;
 }
 
 function appendMessageEl(msg) {
@@ -836,18 +1042,18 @@ function appendMessageEl(msg) {
   el.className = `message ${msg.role}`;
   el.dataset.id = msg.id;
 
-  // Image-gen messages use a purple gradient avatar
-  const hasImages = msg.images && msg.images.length > 0;
+  const hasImages       = msg.images && msg.images.length > 0;
   const avatarGradStart = hasImages ? '#7c3aed' : '#10a37f';
   const avatarGradEnd   = hasImages ? '#4f46e5' : '#0d8965';
 
   const avatarContent = msg.role === 'user'
     ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:17px;height:17px;color:#fff"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>`
-    : `<svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg" style="width:20px;height:20px"><circle cx="18" cy="18" r="18" fill="url(#ag${msg.id?.slice(-4)||'x'})"/><path d="M24 14h-5.5a2.5 2.5 0 000 5H21a2.5 2.5 0 010 5h-6" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/><defs><linearGradient id="ag${msg.id?.slice(-4)||'x'}" x1="0" y1="0" x2="36" y2="36"><stop offset="0%" stop-color="${avatarGradStart}"/><stop offset="100%" stop-color="${avatarGradEnd}"/></linearGradient></defs></svg>`;
+    : `<svg viewBox="0 0 36 36" fill="none" style="width:20px;height:20px"><circle cx="18" cy="18" r="18" fill="url(#ag${msg.id?.slice(-4)||'x'})"/><path d="M24 14h-5.5a2.5 2.5 0 000 5H21a2.5 2.5 0 010 5h-6" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/><defs><linearGradient id="ag${msg.id?.slice(-4)||'x'}" x1="0" y1="0" x2="36" y2="36"><stop offset="0%" stop-color="${avatarGradStart}"/><stop offset="100%" stop-color="${avatarGradEnd}"/></linearGradient></defs></svg>`;
 
   const copyIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`;
-  const regenIcon = msg.role === 'assistant' && !hasImages ? `<button class="msg-action-btn" onclick="regenerateFrom('${msg.id}')" title="Regenerate">${regenSvg()}</button>` : '';
-  const delIcon = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2m4 5v6m-4-6v6"/></svg>`;
+  const delIcon  = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6m3 0V4a1 1 0 011-1h4a1 1 0 011 1v2m4 5v6m-4-6v6"/></svg>`;
+  const regenBtn = msg.role === 'assistant' && !hasImages
+    ? `<button class="msg-action-btn" onclick="regenerateFrom('${msg.id}')" title="Regenerate">${regenSvg()}</button>` : '';
 
   let renderedContent;
   if (msg.role === 'assistant') {
@@ -855,7 +1061,7 @@ function appendMessageEl(msg) {
     const imgHtml  = hasImages ? buildImageCardHtml(msg.images, msg.id) : '';
     renderedContent = textHtml + imgHtml;
   } else {
-    renderedContent = `<p>${escapeHtml(msg.content).replace(/\n/g,'<br>')}</p>`;
+    renderedContent = renderUserMessageContent(msg);
   }
 
   el.innerHTML = `
@@ -866,23 +1072,19 @@ function appendMessageEl(msg) {
         <span class="msg-time">${fmtTime(msg.timestamp)}</span>
         <div class="msg-actions">
           ${!hasImages ? `<button class="msg-action-btn" onclick="copyMsgContent('${msg.id}')" title="Copy">${copyIcon}</button>` : ''}
-          ${regenIcon}
+          ${regenBtn}
           <button class="msg-action-btn" onclick="deleteMessage('${msg.id}')" title="Delete">${delIcon}</button>
         </div>
       </div>
     </div>`;
 
   els.messagesWrapper.appendChild(el);
-  // Attach size labels for any images
   if (hasImages) attachImgSizeLabels(el);
   return el;
 }
 
-function regenSvg() { return `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1015.85-5.5"/></svg>`; }
-
 window.copyMsgContent = function(id) {
-  const chat = state.chats[state.activeChatId];
-  const msg = chat?.messages.find(m => m.id === id);
+  const msg = state.chats[state.activeChatId]?.messages.find(m => m.id === id);
   if (!msg) return;
   navigator.clipboard.writeText(msg.content).then(() => toast('Copied to clipboard', 'success'));
 };
@@ -901,38 +1103,50 @@ window.regenerateFrom = async function(id) {
   if (!chat || state.isGenerating) return;
   const idx = chat.messages.findIndex(m => m.id === id);
   if (idx === -1) return;
-  // Keep all messages UP TO the assistant message and regenerate
   chat.messages = chat.messages.slice(0, idx);
   saveChats();
   renderChat();
   await sendRequest();
 };
 
-// ── SCROLL ────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────
+   § 17  SCROLL
+   ───────────────────────────────────────────────────────────────── */
+
 function scrollToBottom(smooth = true) {
   if (!state.settings.autoScroll && smooth) return;
   els.chatArea.scrollTo({ top: els.chatArea.scrollHeight, behavior: smooth ? 'smooth' : 'instant' });
 }
 
-// ── GENERATE / SEND ───────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────
+   § 18  SEND MESSAGE (orchestrator)
+   ───────────────────────────────────────────────────────────────── */
+
 async function sendMessage(content) {
-  if (!content.trim() || state.isGenerating) return;
+  if (!content.trim() && state.attachments.length === 0) return;
+  if (state.isGenerating) return;
 
   const chat = state.chats[state.activeChatId];
   if (!chat) return;
 
-  // Hide welcome, show messages
   els.welcomeScreen.style.display = 'none';
 
-  // Add user message
-  const userMsg = { id: uid(), role: 'user', content: content.trim(), timestamp: Date.now() };
+  // Capture and clear pending attachments
+  const msgAttachments = [...state.attachments];
+  state.attachments    = [];
+  renderAttachPreview();
+
+  const userMsg = {
+    id: uid(), role: 'user', content: content.trim(),
+    attachments: msgAttachments.length > 0 ? msgAttachments : undefined,
+    timestamp: Date.now(),
+  };
   chat.messages.push(userMsg);
   appendMessageEl(userMsg);
   scrollToBottom();
   playSound(600, 0.08);
 
-  // Update chat title from first message
-  if (chat.messages.filter(m=>m.role==='user').length === 1) {
+  if (chat.messages.filter(m => m.role === 'user').length === 1) {
     autoTitle(state.activeChatId);
     renderChatList();
     els.topbarTitle.textContent = chat.title;
@@ -941,7 +1155,6 @@ async function sendMessage(content) {
   saveChats();
   updateTokenCounter();
 
-  // Route to image generation if current model is an image-gen model
   if (isImageGenModel(state.settings.model)) {
     await sendImageGenerationRequest(content.trim());
   } else {
@@ -949,37 +1162,51 @@ async function sendMessage(content) {
   }
 }
 
+/* ─────────────────────────────────────────────────────────────────
+   § 19  SEND REQUEST (AI completion)
+   ───────────────────────────────────────────────────────────────── */
+
 async function sendRequest() {
   const chat = state.chats[state.activeChatId];
   if (!chat || state.isGenerating) return;
 
-  state.isGenerating = true;
+  state.isGenerating    = true;
   state.abortController = new AbortController();
   setSendingState(true);
   setStatus('loading', 'Generating…');
 
-  // Build message history for API
-  const webSearchEnabled = state.settings.runtime === 'openrouter' && state.settings.webSearch;
-  const messages = [];
-  let sysPrompt = state.settings.systemPrompt.trim();
-  if (webSearchEnabled) {
-    sysPrompt = (sysPrompt ? sysPrompt + '\n\n' : '') + WEB_SEARCH_INSTRUCTIONS;
-  }
-  if (sysPrompt) {
-    messages.push({ role: 'system', content: sysPrompt });
-  }
-  chat.messages.forEach(m => messages.push({ role: m.role, content: m.content }));
+  // Web search availability: only on OpenAI-compatible runtimes
+  const webSearchEnabled = isOpenAIRuntime() && state.settings.webSearch;
 
-  // Create assistant message placeholder
+  // Build message history
+  const messages = [];
+  let sysPrompt  = state.settings.systemPrompt.trim();
+  if (webSearchEnabled) sysPrompt = (sysPrompt ? sysPrompt + '\n\n' : '') + WEB_SEARCH_INSTRUCTIONS;
+  if (sysPrompt) messages.push({ role: 'system', content: sysPrompt });
+
+  // Convert stored messages to API format (include multimodal content)
+  for (const m of chat.messages) {
+    if (isOpenAIRuntime()) {
+      const content = buildOpenAIContent(m.content, m.attachments);
+      messages.push({ role: m.role, content });
+    } else {
+      // Ollama: text + images array
+      const msgObj = { role: m.role, content: m.content };
+      const imgs   = buildOllamaImages(m.attachments);
+      if (imgs) msgObj.images = imgs;
+      messages.push(msgObj);
+    }
+  }
+
+  // Assistant placeholder
   const assistantMsg = { id: uid(), role: 'assistant', content: '', timestamp: Date.now() };
   chat.messages.push(assistantMsg);
 
-  // Create streaming element
   const msgEl = document.createElement('div');
-  msgEl.className = 'message assistant';
-  msgEl.dataset.id = assistantMsg.id;
-  const avatarId = assistantMsg.id.slice(-4);
-  msgEl.innerHTML = `
+  msgEl.className   = 'message assistant';
+  msgEl.dataset.id  = assistantMsg.id;
+  const avatarId    = assistantMsg.id.slice(-4);
+  msgEl.innerHTML   = `
     <div class="msg-avatar">
       <svg viewBox="0 0 36 36" fill="none" style="width:20px;height:20px"><circle cx="18" cy="18" r="18" fill="url(#ag${avatarId})"/><path d="M24 14h-5.5a2.5 2.5 0 000 5H21a2.5 2.5 0 010 5h-6" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/><defs><linearGradient id="ag${avatarId}" x1="0" y1="0" x2="36" y2="36"><stop offset="0%" stop-color="#10a37f"/><stop offset="100%" stop-color="#0d8965"/></linearGradient></defs></svg>
     </div>
@@ -989,33 +1216,21 @@ async function sendRequest() {
     </div>`;
   els.messagesWrapper.appendChild(msgEl);
 
-  // Stop button
   const stopWrapper = document.createElement('div');
   stopWrapper.className = 'stop-btn-wrapper';
   stopWrapper.innerHTML = `<button class="stop-btn visible" id="stopGenBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="4" width="16" height="16" rx="1"/></svg> Stop</button>`;
   els.messagesWrapper.appendChild(stopWrapper);
-  $('stopGenBtn')?.addEventListener('click', () => {
-    state.abortController?.abort();
-  });
-
+  $('stopGenBtn')?.addEventListener('click', () => state.abortController?.abort());
   scrollToBottom();
 
   const contentEl = msgEl.querySelector('.msg-content');
 
-  // Runs exactly one completion request (streaming or not) against whichever
-  // runtime is active, rendering tokens into contentEl as they arrive, and
-  // resolves with the full response text. Used directly for a normal reply,
-  // and called a second time with search results appended when the model
-  // asks to search (see the loop below).
+  // ── Core completion function ──────────────────────────────────
   async function runOneCompletion(msgsForThisCall) {
     let url, payload;
 
-    if (state.settings.runtime === 'openai' || state.settings.runtime === 'openrouter') {
-      if (state.settings.runtime === 'openrouter') {
-        url = 'https://openrouter.ai/api/v1/chat/completions';
-      } else {
-        url = `${state.settings.serverUrl.replace(/\/$/, '')}/v1/chat/completions`;
-      }
+    if (isOpenAIRuntime()) {
+      url = `${getApiBaseUrl().replace(/\/$/, '')}/chat/completions`;
       payload = {
         model: state.settings.model,
         messages: msgsForThisCall,
@@ -1023,41 +1238,34 @@ async function sendRequest() {
         temperature: state.settings.temperature,
       };
     } else {
-      url = `${state.settings.serverUrl.replace(/\/$/, '')}/api/chat`;
+      // Ollama
+      url = `${getApiBaseUrl().replace(/\/$/, '')}/api/chat`;
       payload = {
         model: state.settings.model,
         messages: msgsForThisCall,
         stream: state.settings.stream,
-        options: {
-          temperature: state.settings.temperature,
-          num_ctx: state.settings.numCtx,
-        },
+        options: { temperature: state.settings.temperature, num_ctx: state.settings.numCtx },
       };
     }
 
     const headers = { 'Content-Type': 'application/json' };
-    if (state.settings.apiKey && (state.settings.runtime === 'openai' || state.settings.runtime === 'openrouter')) {
-      headers['Authorization'] = `Bearer ${state.settings.apiKey}`;
-    }
+    const key     = getApiKey();
+    if (key && isOpenAIRuntime()) headers['Authorization'] = `Bearer ${key}`;
 
     const response = await fetch(url, {
       method: 'POST',
-      headers: headers,
+      headers,
       body: JSON.stringify(payload),
       signal: state.abortController.signal,
     });
 
     if (!response.ok) {
       const err = await response.text();
-      throw new Error(`Server error ${response.status}: ${err.slice(0,200)}`);
+      throw new Error(`Server error ${response.status}: ${err.slice(0, 200)}`);
     }
 
     let text = '';
 
-    // While Web Search is on, a reply that *starts* with '{' might be the
-    // model's search-request JSON rather than a real answer — render a
-    // "searching" placeholder instead of flashing raw JSON at the user until
-    // we know which one it is.
     const renderLive = () => {
       if (webSearchEnabled && text.trim().startsWith('{')) {
         contentEl.innerHTML = `<div class="thinking-dots"><span></span><span></span><span></span></div>`;
@@ -1068,94 +1276,71 @@ async function sendRequest() {
     };
 
     if (state.settings.stream) {
-      const reader = response.body.getReader();
+      const reader  = response.body.getReader();
       const decoder = new TextDecoder();
-      let buffer = '';
-
+      let buffer    = '';
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() || '';
-
         for (const line of lines) {
           const tLine = line.trim();
           if (!tLine) continue;
-
-          if (state.settings.runtime === 'openai' || state.settings.runtime === 'openrouter') {
-            // OpenAI/OpenRouter SSE format
+          if (isOpenAIRuntime()) {
             if (tLine.startsWith('data: ')) {
               const dataStr = tLine.slice(6).trim();
               if (dataStr === '[DONE]') continue;
               try {
-                const data = JSON.parse(dataStr);
+                const data  = JSON.parse(dataStr);
                 const chunk = data.choices?.[0]?.delta?.content || '';
-                if (chunk) {
-                  text += chunk;
-                  renderLive();
-                }
-              } catch(pe) {
-                // Silent fail on parse errors
-              }
+                if (chunk) { text += chunk; renderLive(); }
+              } catch(pe) {}
             }
           } else {
             // Ollama NDJSON
             try {
               const data = JSON.parse(tLine);
-              if (data.message?.content) {
-                text += data.message.content;
-                renderLive();
-              }
+              if (data.message?.content) { text += data.message.content; renderLive(); }
               if (data.done && data.eval_count) {
                 state.totalTokens += (data.prompt_eval_count || 0) + (data.eval_count || 0);
                 updateTokenCounter();
               }
-            } catch(pe) {
-              // Silent fail
-            }
+            } catch(pe) {}
           }
         }
       }
     } else {
       const data = await response.json();
-      if (state.settings.runtime === 'openai' || state.settings.runtime === 'openrouter') {
+      if (isOpenAIRuntime()) {
         text = data.choices?.[0]?.message?.content || '';
-        if (data.usage?.total_tokens) {
-          state.totalTokens += data.usage.total_tokens;
-          updateTokenCounter();
-        }
+        if (data.usage?.total_tokens) { state.totalTokens += data.usage.total_tokens; updateTokenCounter(); }
       } else {
         text = data.message?.content || '';
-        if (data.eval_count) {
-          state.totalTokens += (data.prompt_eval_count || 0) + (data.eval_count || 0);
-          updateTokenCounter();
-        }
+        if (data.eval_count) { state.totalTokens += (data.prompt_eval_count || 0) + (data.eval_count || 0); updateTokenCounter(); }
       }
       renderLive();
     }
-
     return text;
   }
 
   try {
     let callMessages = messages;
-    let fullText = '';
-    let sources = [];
-    const maxSearches = 2; // hard cap so a stubborn model can't loop forever
+    let fullText     = '';
+    let sources      = [];
+    const maxSearches = 2;
 
     for (let searchCount = 0; ; searchCount++) {
       fullText = await runOneCompletion(callMessages);
-
       const query = webSearchEnabled ? extractSearchQuery(fullText) : null;
       if (!query || searchCount >= maxSearches) break;
 
-      contentEl.innerHTML = `<div class="search-status">🔎 Searching the web for “${escapeHtml(query)}”…</div>`;
+      contentEl.innerHTML = `<div class="search-status">🔎 Searching the web for "${escapeHtml(query)}"…</div>`;
       if (state.settings.autoScroll) scrollToBottom();
 
       const results = await duckDuckGoSearch(query);
       sources = mergeSources(sources, results.map(r => ({ url: r.url, title: r.title })));
-
       callMessages = [
         ...callMessages,
         { role: 'assistant', content: fullText },
@@ -1163,46 +1348,42 @@ async function sendRequest() {
       ];
     }
 
-    // Also detect any base64 inline images in the text response
     const inlineImgs = extractInlineImages(fullText);
     if (inlineImgs.length > 0) {
-      assistantMsg.images = inlineImgs.map(f => ({ src: f.src, altText: f.altText }));
+      assistantMsg.images  = inlineImgs.map(f => ({ src: f.src, altText: f.altText }));
       assistantMsg.content = stripInlineImages(fullText);
       const textHtml = assistantMsg.content ? renderMarkdown(assistantMsg.content) + renderSourcesHtml(sources) : '';
       const imgHtml  = buildImageCardHtml(assistantMsg.images, assistantMsg.id);
       contentEl.innerHTML = textHtml + imgHtml;
       attachImgSizeLabels(contentEl);
     } else {
-      contentEl.innerHTML = renderMarkdown(fullText) + renderSourcesHtml(sources);
+      contentEl.innerHTML  = renderMarkdown(fullText) + renderSourcesHtml(sources);
       assistantMsg.content = fullText;
       assistantMsg.sources = sources;
     }
     assistantMsg.timestamp = Date.now();
 
-    // Re-highlight code blocks
     contentEl.querySelectorAll('pre code').forEach(el => {
       try { hljs.highlightElement(el); } catch(e) {}
     });
 
     playSound(440, 0.12);
-    setStatus('online', `Connected to server · ${state.settings.model}`);
+    setStatus('online', `Connected · ${state.settings.model}`);
 
   } catch(err) {
     if (err.name === 'AbortError') {
-      contentEl.innerHTML = renderMarkdown(assistantMsg.content || '') + '\n\n<em style="color:var(--text-muted);font-size:12px">⏹ Generation stopped</em>';
+      contentEl.innerHTML  = renderMarkdown(assistantMsg.content || '') + '\n\n<em style="color:var(--text-muted);font-size:12px">⏹ Generation stopped</em>';
       assistantMsg.content = assistantMsg.content + '\n\n[Generation stopped]';
       toast('Generation stopped', 'info');
     } else {
       const errMsg = formatError(err);
-      contentEl.innerHTML = `<div style="color:#f87171;font-size:13.5px;line-height:1.6"><strong>⚠️ Error</strong><br>${escapeHtml(errMsg)}</div>`;
+      contentEl.innerHTML  = `<div style="color:#f87171;font-size:13.5px;line-height:1.6"><strong>⚠️ Error</strong><br>${escapeHtml(errMsg)}</div>`;
       assistantMsg.content = `[Error: ${errMsg}]`;
       setStatus('error', errMsg.slice(0, 80));
       toast(errMsg, 'error', 5000);
     }
   } finally {
-    // Remove stop button
     stopWrapper.remove();
-    // Update meta
     const metaEl = msgEl.querySelector('.msg-meta');
     metaEl.innerHTML = `
       <span class="msg-time">${fmtTime(assistantMsg.timestamp)}</span>
@@ -1222,21 +1403,18 @@ async function sendRequest() {
 
 function formatError(err) {
   const msg = err.message || String(err);
-  if (msg.includes('Failed to fetch') || msg.includes('fetch')) {
-    return 'Cannot connect to server. Make sure your AI runtime is running on the correct Server URL.';
-  }
-  if (msg.includes('model') || msg.includes('404')) {
-    return `Model "${state.settings.model}" not found on server. Try refreshing models.`;
-  }
-  if (msg.includes('401') || msg.includes('Unauthorized')) {
-    return 'Authentication failed. Check your API key.';
-  }
+  if (msg.includes('Failed to fetch') || msg.includes('fetch')) return 'Cannot connect to server. Make sure your AI runtime is running on the correct Server URL.';
+  if (msg.includes('model') || msg.includes('404'))             return `Model "${state.settings.model}" not found on server. Try refreshing models.`;
+  if (msg.includes('401') || msg.includes('Unauthorized'))      return 'Authentication failed. Check your API key.';
   return msg;
 }
 
-// ── UI STATE ─────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────
+   § 20  UI STATE
+   ───────────────────────────────────────────────────────────────── */
+
 function setSendingState(loading) {
-  els.sendBtn.disabled = loading;
+  els.sendBtn.disabled   = loading;
   els.userInput.disabled = loading;
   if (loading) {
     els.sendBtn.innerHTML = `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
@@ -1247,7 +1425,7 @@ function setSendingState(loading) {
 }
 
 function setStatus(type, text) {
-  els.statusDot.className = `status-dot ${type}`;
+  els.statusDot.className  = `status-dot ${type}`;
   els.statusText.textContent = text;
 }
 
@@ -1257,47 +1435,46 @@ function updateTokenCounter() {
   }
 }
 
-// ── SERVER CONNECTION ─────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────
+   § 21  SERVER CONNECTION & MODEL FETCHING
+   ───────────────────────────────────────────────────────────────── */
+
 async function checkServer() {
-  setStatus('loading', 'Connecting to server…');
+  setStatus('loading', 'Connecting…');
   try {
-    let url;
-    if (state.settings.runtime === 'openrouter') {
-      url = 'https://openrouter.ai/api/v1/models';
-    } else if (state.settings.runtime === 'openai') {
-      url = `${state.settings.serverUrl.replace(/\/$/, '')}/v1/models`;
-    } else {
-      url = `${state.settings.serverUrl.replace(/\/$/, '')}/api/tags`;
-    }
+    const base    = getApiBaseUrl().replace(/\/$/, '');
+    const isOAI   = isOpenAIRuntime();
+    const url     = isOAI ? `${base}/models` : `${base}/api/tags`;
     const headers = {};
-    if (state.settings.apiKey && (state.settings.runtime === 'openai' || state.settings.runtime === 'openrouter')) {
-      headers['Authorization'] = `Bearer ${state.settings.apiKey}`;
-    }
+    const key     = getApiKey();
+    if (key && isOAI) headers['Authorization'] = `Bearer ${key}`;
+
     const r = await fetch(url, { signal: AbortSignal.timeout(8000), headers });
     if (r.ok) {
-      const data = await r.json();
-      let models = [];
-      if (state.settings.runtime === 'openrouter') {
-        models = data.data?.map?.(m => ({ name: m.id })).slice(0, 50) || [];
-      } else if (state.settings.runtime === 'openai') {
+      const data   = await r.json();
+      let models   = [];
+      if (isOAI) {
         models = data.data?.map?.(m => ({ name: m.id || m.name })) || [];
       } else {
         models = data.models || [];
       }
-      const modelCount = models.length;
-      setStatus('online', `Connected · ${modelCount} model${modelCount !== 1 ? 's' : ''} available`);
+      const n = models.length;
+      setStatus('online', `Connected · ${n} model${n !== 1 ? 's' : ''} available`);
       document.querySelector('.model-dot')?.classList.remove('offline');
       return models;
     }
     throw new Error(`HTTP ${r.status}`);
   } catch(e) {
-    if (state.settings.runtime === 'openrouter') {
-      setStatus('error', 'OpenRouter not accessible — check API key & internet');
-    } else if (state.settings.runtime === 'openai') {
-      setStatus('error', 'Server not detected — is Llama.cpp running?');
-    } else {
-      setStatus('error', 'Ollama not detected — open a terminal and run: ollama serve');
-    }
+    const rt = state.settings.runtime;
+    const labels = {
+      openrouter:   'OpenRouter not accessible — check API key & internet',
+      openai_direct:'OpenAI API not reachable — check API key & internet',
+      groq:         'Groq API not reachable — check API key & internet',
+      together:     'Together AI not reachable — check API key & internet',
+      openai:       'Server not detected — is Llama.cpp / your server running?',
+      ollama:       'Ollama not detected — run: ollama serve',
+    };
+    setStatus('error', labels[rt] || 'Cannot connect to server');
     document.querySelector('.model-dot')?.classList.add('offline');
     return [];
   }
@@ -1324,7 +1501,10 @@ async function fetchAndShowModels() {
   });
 }
 
-// ── EXPORT ────────────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────
+   § 22  EXPORT
+   ───────────────────────────────────────────────────────────────── */
+
 function exportChat(id) {
   const chat = state.chats[id];
   if (!chat || chat.messages.length === 0) { toast('No messages to export', 'warn'); return; }
@@ -1337,7 +1517,7 @@ function exportChat(id) {
     lines.push('---');
     lines.push('');
   });
-  download(`${chat.title.replace(/[^a-z0-9]/gi,'_')}.md`, lines.join('\n'));
+  download(`${chat.title.replace(/[^a-z0-9]/gi, '_')}.md`, lines.join('\n'));
   toast('Chat exported!', 'success');
 }
 
@@ -1349,58 +1529,48 @@ function exportAllChats() {
   toast(`Exported ${ids.length} chat${ids.length !== 1 ? 's' : ''}!`, 'success');
 }
 
-function download(filename, content) {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([content], {type:'text/plain'}));
-  a.download = filename; a.click();
-}
+/* ─────────────────────────────────────────────────────────────────
+   § 23  SETTINGS
+   ───────────────────────────────────────────────────────────────── */
 
-// ── SETTINGS ─────────────────────────────────────────────────────
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   const hlTheme = $('hlTheme');
-  if (hlTheme) {
-    hlTheme.href = theme === 'light'
-      ? 'vendor/highlight-light.min.css'
-      : 'vendor/highlight-dark.min.css';
-  }
+  if (hlTheme) hlTheme.href = theme === 'light' ? 'vendor/highlight-light.min.css' : 'vendor/highlight-dark.min.css';
+}
+
+function buildRuntimeButtons() {
+  if (!els.runtimeOptions) return;
+  els.runtimeOptions.innerHTML = Object.entries(RUNTIMES).map(([key, rt]) =>
+    `<button class="shortcut-btn ${state.settings.runtime === key ? 'active' : ''}" data-runtime="${key}">${rt.label}</button>`
+  ).join('');
 }
 
 function openSettings() {
-  // Populate fields
-  els.serverUrl.value    = state.settings.serverUrl;
-  els.modelInput.value   = state.settings.model;
-  els.systemPrompt.value = state.settings.systemPrompt;
-  els.tempSlider.value   = state.settings.temperature;
-  els.tempDisplay.textContent = parseFloat(state.settings.temperature).toFixed(2);
+  buildRuntimeButtons();
+
+  els.serverUrl.value          = state.settings.serverUrl;
+  els.modelInput.value         = state.settings.model;
+  els.systemPrompt.value       = state.settings.systemPrompt;
+  els.tempSlider.value         = state.settings.temperature;
+  els.tempDisplay.textContent  = parseFloat(state.settings.temperature).toFixed(2);
   if (els.tempBadge) els.tempBadge.textContent = getTempBadgeLabel(state.settings.temperature);
-  els.ctxSlider.value    = state.settings.numCtx;
-  els.ctxDisplay.textContent = Number(state.settings.numCtx).toLocaleString();
+  els.ctxSlider.value          = state.settings.numCtx;
+  els.ctxDisplay.textContent   = Number(state.settings.numCtx).toLocaleString();
   els.streamToggle.checked     = state.settings.stream;
   els.autoScrollToggle.checked = state.settings.autoScroll;
   els.soundToggle.checked      = state.settings.sound;
   if (els.apiKey) els.apiKey.value = state.settings.apiKey || '';
   if (els.webSearchToggle) els.webSearchToggle.checked = !!state.settings.webSearch;
 
-  document.querySelectorAll('.theme-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.theme === state.settings.theme);
+  document.querySelectorAll('.theme-btn').forEach(b => b.classList.toggle('active', b.dataset.theme === state.settings.theme));
+  document.querySelectorAll('#shortcutOptions .shortcut-btn').forEach(b => {
+    if (b.dataset.mode) b.classList.toggle('active', b.dataset.mode === state.settings.sendMode);
   });
-  document.querySelectorAll('.shortcut-btn').forEach(b => {
-    if (b.dataset.mode) {
-      b.classList.toggle('active', b.dataset.mode === state.settings.sendMode);
-    }
-  });
-  if (els.runtimeOptions) {
-    els.runtimeOptions.querySelectorAll('.shortcut-btn').forEach(b => {
-      if (b.dataset.runtime) {
-        b.classList.toggle('active', b.dataset.runtime === state.settings.runtime);
-      }
-    });
-    updateServerUrlHint(state.settings.runtime);
-    updateWebSearchVisibility(state.settings.runtime);
-  }
 
-  // Sync personality presets
+  updateServerUrlHint(state.settings.runtime);
+  updateWebSearchVisibility(state.settings.runtime);
+  updateServerKeyStatus();
   syncPersonalityUI(state.settings.personality || 'balanced');
 
   els.settingsOverlay.classList.add('open');
@@ -1411,63 +1581,75 @@ function getServerType(url) {
   if (!url) return 'local';
   const u = url.toLowerCase();
   if (u.includes('localhost') || u.includes('127.0.0.1') || u.includes('::1')) return 'local';
-  // RFC 1918 private ranges
   if (/^https?:\/\/(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.)/.test(u)) return 'lan';
   return 'external';
 }
 
 function updateServerBadge(url) {
   if (!els.serverTypeBadge) return;
-  const type = getServerType(url);
   const labels = { local: '🏠 local', lan: '📡 lan', external: '🌐 external' };
-  els.serverTypeBadge.textContent = labels[type] || 'local';
+  els.serverTypeBadge.textContent = labels[getServerType(url)] || 'local';
 }
 
 function updateServerUrlHint(runtime) {
   updateServerBadge(els.serverUrl?.value || '');
 }
 
-// Web search is an OpenRouter-only plugin — hide the toggle for other runtimes
+/** Web search is available on all OpenAI-compatible runtimes (not Ollama). */
 function updateWebSearchVisibility(runtime) {
   if (!els.webSearchGroup) return;
-  els.webSearchGroup.style.display = runtime === 'openrouter' ? '' : 'none';
+  const supported = RUNTIMES[runtime]?.supportsWebSearch || false;
+  els.webSearchGroup.style.display = supported ? '' : 'none';
+  if (els.webSearchGroup.querySelector('.setting-hint')) {
+    const hint = els.webSearchGroup.querySelector('.setting-hint');
+    const rtLabel = RUNTIMES[runtime]?.label || runtime;
+    hint.textContent = supported
+      ? `Lets the model search DuckDuckGo before answering when it decides it needs to. Available on ${rtLabel} and all OpenAI-compatible backends.`
+      : 'Web search is only available on OpenAI-compatible backends (not Ollama).';
+  }
 }
 
-// Wire up server quick select buttons
+/** Show whether a server-side .env key is active for the current runtime. */
+function updateServerKeyStatus() {
+  if (!els.serverKeyStatus) return;
+  const envKey = RUNTIMES[state.settings.runtime]?.keyEnvName;
+  if (envKey && serverKeys[envKey]) {
+    els.serverKeyStatus.textContent = '✅ API key loaded from server .env — no need to enter it here.';
+    els.serverKeyStatus.style.display = 'block';
+    els.serverKeyStatus.style.color   = 'var(--accent-color)';
+    if (els.apiKey) { els.apiKey.placeholder = 'Using server .env key'; }
+  } else {
+    els.serverKeyStatus.textContent = '';
+    els.serverKeyStatus.style.display = 'none';
+    if (els.apiKey) { els.apiKey.placeholder = 'sk-... (required for cloud providers)'; }
+  }
+}
+
 function bindServerQuickBtns() {
   if (!els.serverQuickBtns) return;
   els.serverQuickBtns.addEventListener('click', e => {
     const btn = e.target.closest('.server-quick-btn');
     if (!btn) return;
-    const url  = btn.dataset.url;
+    const url     = btn.dataset.url;
     const runtime = btn.dataset.runtime;
 
     if (url) {
       els.serverUrl.value = url;
       updateServerBadge(url);
       els.serverUrl.focus();
-
-      // If it's a template URL, select the placeholder part so they can type over it
       if (url.includes('192.168.1.X')) els.serverUrl.setSelectionRange(7, 18);
-      if (url.includes('myserver.example.com')) els.serverUrl.setSelectionRange(8, 28);
     }
 
-    // Auto-switch runtime if specified
     if (runtime && els.runtimeOptions) {
-      els.runtimeOptions.querySelectorAll('.shortcut-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.runtime === runtime);
-      });
+      els.runtimeOptions.querySelectorAll('.shortcut-btn').forEach(b =>
+        b.classList.toggle('active', b.dataset.runtime === runtime)
+      );
       updateServerUrlHint(runtime);
-    } else if (url && url.includes('/v1')) {
-      // Auto-detect openai API schema
-      els.runtimeOptions.querySelectorAll('.shortcut-btn').forEach(b => {
-        b.classList.toggle('active', b.dataset.runtime === 'openai');
-      });
-      updateServerUrlHint('openai');
+      updateWebSearchVisibility(runtime);
+      updateServerKeyStatus();
     }
   });
 
-  // Live badge update as user types
   els.serverUrl?.addEventListener('input', e => updateServerBadge(e.target.value));
 }
 
@@ -1475,29 +1657,30 @@ function saveSettingsFromModal() {
   state.settings.serverUrl    = els.serverUrl.value.trim() || 'http://localhost:11434';
   state.settings.model        = els.modelInput.value.trim() || 'gemma4:e2b';
   state.settings.systemPrompt = els.systemPrompt.value;
-  // Parse temperature explicitly as a float and clamp to [0,2]
-  const rawTemp = parseFloat(els.tempSlider.value);
+  const rawTemp               = parseFloat(els.tempSlider.value);
   state.settings.temperature  = isNaN(rawTemp) ? 0.7 : Math.min(2, Math.max(0, rawTemp));
   state.settings.numCtx       = parseInt(els.ctxSlider.value);
   state.settings.stream       = els.streamToggle.checked;
   state.settings.autoScroll   = els.autoScrollToggle.checked;
   state.settings.sound        = els.soundToggle.checked;
-  if (els.apiKey) state.settings.apiKey = els.apiKey.value.trim();
+  if (els.apiKey) state.settings.apiKey   = els.apiKey.value.trim();
   if (els.webSearchToggle) state.settings.webSearch = els.webSearchToggle.checked;
 
-  const activeTheme = document.querySelector('.theme-btn.active')?.dataset.theme || 'dark';
-  state.settings.theme = activeTheme;
+  const activeTheme         = document.querySelector('.theme-btn.active')?.dataset.theme || 'dark';
+  state.settings.theme      = activeTheme;
   applyTheme(activeTheme);
 
-  const activeShortcut = els.shortcutOptions?.querySelector('.shortcut-btn.active')?.dataset.mode || 'enter';
-  state.settings.sendMode = activeShortcut;
+  const activeShortcut      = els.shortcutOptions?.querySelector('.shortcut-btn.active')?.dataset.mode || 'enter';
+  state.settings.sendMode   = activeShortcut;
 
   if (els.runtimeOptions) {
-    const activeRuntime = els.runtimeOptions.querySelector('.shortcut-btn.active')?.dataset.runtime || 'ollama';
-    state.settings.runtime = activeRuntime;
+    const activeRuntime     = els.runtimeOptions.querySelector('.shortcut-btn.active')?.dataset.runtime || 'ollama';
+    state.settings.runtime  = activeRuntime;
+    // Auto-set default URL for known cloud runtimes if user hasn't customized
+    const rt = RUNTIMES[activeRuntime];
+    if (rt && !state.settings.serverUrl) state.settings.serverUrl = rt.defaultUrl;
   }
 
-  // Detect if current prompt matches any preset
   const matchedPreset = Object.entries(PERSONALITY_PRESETS).find(
     ([key, p]) => key !== 'custom' && p.systemPrompt === state.settings.systemPrompt
   );
@@ -1513,9 +1696,9 @@ function saveSettingsFromModal() {
 function resetSettings() {
   const defaults = {
     serverUrl: 'http://localhost:11434', runtime: 'ollama', model: 'gemma4:e2b',
-    systemPrompt: 'You are Prefrontal, a helpful, honest, and harmless AI assistant. You are running entirely locally on the user\'s device with complete privacy. Be concise, clear, and friendly.',
-    temperature: 0.7, numCtx: 8192, stream: true, autoScroll: true, sound: false, sendMode: 'enter', theme: 'dark',
-    webSearch: false,
+    systemPrompt: "You are Prefrontal, a helpful, honest, and harmless AI assistant. You are running entirely locally on the user's device with complete privacy. Be concise, clear, and friendly.",
+    temperature: 0.7, numCtx: 8192, stream: true, autoScroll: true, sound: false,
+    sendMode: 'enter', theme: 'dark', webSearch: false, apiKey: '',
   };
   Object.assign(state.settings, defaults);
   saveSettings();
@@ -1523,29 +1706,42 @@ function resetSettings() {
   toast('Settings reset to defaults', 'info');
 }
 
-// ── INPUT HANDLING ────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────
+   § 24  INPUT HANDLING
+   ───────────────────────────────────────────────────────────────── */
+
 function autoResizeInput() {
-  const ta = els.userInput;
+  const ta    = els.userInput;
   ta.style.height = 'auto';
   ta.style.height = Math.min(ta.scrollHeight, 180) + 'px';
-  const len = ta.value.length;
+  const len   = ta.value.length;
   if (len > 20000) {
-    els.charCount.textContent = `${len.toLocaleString()} / 32,000`;
+    els.charCount.textContent   = `${len.toLocaleString()} / 32,000`;
     els.charCount.style.display = 'block';
-    els.charCount.style.color = len > 30000 ? '#f87171' : 'var(--text-muted)';
+    els.charCount.style.color   = len > 30000 ? '#f87171' : 'var(--text-muted)';
   } else {
     els.charCount.style.display = 'none';
   }
 }
 
-// ── EVENT BINDINGS ────────────────────────────────────────────────
+function handleSend() {
+  const content = els.userInput.value.trim();
+  if (!content && state.attachments.length === 0) return;
+  if (state.isGenerating) return;
+  els.userInput.value = '';
+  autoResizeInput();
+  sendMessage(content);
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   § 25  EVENT BINDINGS
+   ───────────────────────────────────────────────────────────────── */
+
 function bindEvents() {
   bindServerQuickBtns();
 
-  // Sidebar toggle
-  els.sidebarToggle.addEventListener('click', () => {
-    els.sidebar.classList.toggle('collapsed');
-  });
+  // Sidebar
+  els.sidebarToggle.addEventListener('click', () => els.sidebar.classList.toggle('collapsed'));
 
   // New chat
   els.newChatBtn.addEventListener('click', () => {
@@ -1560,25 +1756,22 @@ function bindEvents() {
   // Search chats
   els.searchChats.addEventListener('input', e => renderChatList(e.target.value));
 
-  // Export / Clear all
+  // Export / clear all
   els.exportAllBtn.addEventListener('click', exportAllChats);
   els.clearAllBtn.addEventListener('click', async () => {
     const ok = await confirm('Clear All Conversations', 'This will permanently delete all conversations. This cannot be undone.');
     if (ok) {
       state.chats = {};
-      const id = createChat();
+      const id    = createChat();
       state.activeChatId = id;
-      saveChats();
-      renderChatList();
-      renderChat();
+      saveChats(); renderChatList(); renderChat();
       toast('All conversations cleared', 'success');
     }
   });
 
-  // Export current chat
   els.exportChatBtn.addEventListener('click', () => exportChat(state.activeChatId));
 
-  // Settings
+  // Settings modal
   els.settingsBtn.addEventListener('click', openSettings);
   els.closeSettings.addEventListener('click', () => els.settingsOverlay.classList.remove('open'));
   els.settingsOverlay.addEventListener('click', e => { if (e.target === els.settingsOverlay) els.settingsOverlay.classList.remove('open'); });
@@ -1595,15 +1788,15 @@ function bindEvents() {
     applyTheme(btn.dataset.theme);
   });
 
-  // Shortcut buttons / Runtime options
+  // Runtime / shortcut option buttons (delegated)
   document.addEventListener('click', e => {
-    // Handling shortcut-btn inside shortcutOptions (Enter to Send)
+    // Keyboard shortcut (Enter/Shift+Enter to send)
     if (e.target.closest('#shortcutOptions .shortcut-btn')) {
       const btn = e.target.closest('.shortcut-btn');
       document.querySelectorAll('#shortcutOptions .shortcut-btn').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
     }
-    // Handling shortcut-btn inside runtimeOptions
+    // Runtime selector
     if (e.target.closest('#runtimeOptions .shortcut-btn')) {
       const btn = e.target.closest('.shortcut-btn');
       document.querySelectorAll('#runtimeOptions .shortcut-btn').forEach(b => b.classList.remove('active'));
@@ -1612,29 +1805,25 @@ function bindEvents() {
       if (rt) {
         updateServerUrlHint(rt);
         updateWebSearchVisibility(rt);
-        if (rt === 'openrouter') {
-          els.serverUrl.value = 'https://openrouter.ai/api/v1';
-        } else if (rt === 'openai' && els.serverUrl.value === 'http://localhost:11434') {
-          els.serverUrl.value = 'http://localhost:8080/v1';
-        } else if (rt === 'ollama' && (els.serverUrl.value === 'http://localhost:8080/v1' || els.serverUrl.value === 'https://openrouter.ai/api/v1')) {
-          els.serverUrl.value = 'http://localhost:11434';
-        }
+        updateServerKeyStatus();
+        // Auto-fill default URL for known runtimes
+        const rdef = RUNTIMES[rt];
+        if (rdef) els.serverUrl.value = rdef.defaultUrl;
       }
     }
   });
 
-  // Temp slider — live label update
+  // Temp / ctx sliders
   els.tempSlider.addEventListener('input', e => {
     const val = parseFloat(e.target.value);
     els.tempDisplay.textContent = val.toFixed(2);
     if (els.tempBadge) els.tempBadge.textContent = getTempBadgeLabel(val);
   });
-  // Context slider
   els.ctxSlider.addEventListener('input', e => {
     els.ctxDisplay.textContent = Number(e.target.value).toLocaleString();
   });
 
-  // Personality presets in settings modal
+  // Personality presets
   document.addEventListener('click', e => {
     const btn = e.target.closest('#personalityPresets .personality-preset-btn');
     if (!btn) return;
@@ -1646,13 +1835,10 @@ function bindEvents() {
     const matches = Object.entries(PERSONALITY_PRESETS).some(
       ([key, p]) => key !== 'custom' && p.systemPrompt === els.systemPrompt.value
     );
-    if (!matches) {
-      state.settings.personality = 'custom';
-      syncPersonalityUI('custom');
-    }
+    if (!matches) { state.settings.personality = 'custom'; syncPersonalityUI('custom'); }
   });
 
-  // Welcome screen personality pills
+  // Welcome personality pills
   const welcomeBar = $('welcomePersonalityBar');
   if (welcomeBar) {
     welcomeBar.addEventListener('click', e => {
@@ -1664,18 +1850,59 @@ function bindEvents() {
     });
   }
 
-  // Input events
+  // ── File attachment button ────────────────────────────────────
+  if (els.attachBtn) {
+    els.attachBtn.addEventListener('click', () => {
+      if (!els.attachInput) return;
+      els.attachInput.value = '';
+      els.attachInput.click();
+    });
+  }
+  if (els.attachInput) {
+    els.attachInput.addEventListener('change', async e => {
+      const files = Array.from(e.target.files || []);
+      if (files.length === 0) return;
+      for (const file of files) {
+        if (file.size > 20 * 1024 * 1024) { toast(`${file.name} is too large (max 20 MB)`, 'warn'); continue; }
+        await readFileAsAttachment(file);
+      }
+      renderAttachPreview();
+      // Enable attach button always (model-agnostic; API will reject if unsupported)
+    });
+  }
+
+  // Drag-and-drop file upload onto the chat area
+  els.chatArea.addEventListener('dragover', e => { e.preventDefault(); els.chatArea.classList.add('dragover'); });
+  els.chatArea.addEventListener('dragleave', () => els.chatArea.classList.remove('dragover'));
+  els.chatArea.addEventListener('drop', async e => {
+    e.preventDefault();
+    els.chatArea.classList.remove('dragover');
+    const files = Array.from(e.dataTransfer.files || []);
+    for (const file of files) {
+      if (file.size > 20 * 1024 * 1024) { toast(`${file.name} is too large (max 20 MB)`, 'warn'); continue; }
+      await readFileAsAttachment(file);
+    }
+    renderAttachPreview();
+  });
+
+  // Paste image from clipboard
+  els.userInput.addEventListener('paste', async e => {
+    const items = Array.from(e.clipboardData?.items || []);
+    const imageItem = items.find(i => i.type.startsWith('image/'));
+    if (!imageItem) return;
+    const file = imageItem.getAsFile();
+    if (!file) return;
+    await readFileAsAttachment(file);
+    renderAttachPreview();
+  });
+
+  // Input / send
   els.userInput.addEventListener('input', autoResizeInput);
   els.userInput.addEventListener('keydown', e => {
     const sendOnEnter = state.settings.sendMode === 'enter';
-    const shouldSend = sendOnEnter ? (e.key === 'Enter' && !e.shiftKey) : (e.key === 'Enter' && e.shiftKey);
-    if (shouldSend) {
-      e.preventDefault();
-      handleSend();
-    }
+    const shouldSend  = sendOnEnter ? (e.key === 'Enter' && !e.shiftKey) : (e.key === 'Enter' && e.shiftKey);
+    if (shouldSend) { e.preventDefault(); handleSend(); }
   });
-
-  // Send button
   els.sendBtn.addEventListener('click', handleSend);
 
   // Welcome chips
@@ -1687,21 +1914,15 @@ function bindEvents() {
     });
   });
 
-  // Confirm dialog overlay
+  // Confirm dialog backdrop
   els.confirmOverlay.addEventListener('click', e => {
     if (e.target === els.confirmOverlay) els.confirmOverlay.classList.remove('open');
   });
 
-  // Keyboard shortcut: Ctrl+N = new chat
+  // Keyboard shortcuts
   document.addEventListener('keydown', e => {
-    if ((e.ctrlKey || e.metaKey) && e.key === 'n' && !e.shiftKey) {
-      e.preventDefault();
-      els.newChatBtn.click();
-    }
-    if ((e.ctrlKey || e.metaKey) && e.key === ',') {
-      e.preventDefault();
-      openSettings();
-    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'n' && !e.shiftKey) { e.preventDefault(); els.newChatBtn.click(); }
+    if ((e.ctrlKey || e.metaKey) && e.key === ',')                  { e.preventDefault(); openSettings(); }
     if (e.key === 'Escape') {
       els.settingsOverlay.classList.remove('open');
       els.confirmOverlay.classList.remove('open');
@@ -1709,53 +1930,14 @@ function bindEvents() {
   });
 }
 
-function handleSend() {
-  const content = els.userInput.value.trim();
-  if (!content || state.isGenerating) return;
-  els.userInput.value = '';
-  autoResizeInput();
-  sendMessage(content);
-}
-
-// ── INIT ──────────────────────────────────────────────────────────
-function init() {
-  loadSettings();
-  loadChats();
-  applyTheme(state.settings.theme);
-
-  // Restore model name in badge
-  els.modelNameDisplay.textContent = state.settings.model;
-
-  // Ensure at least one chat exists
-  if (Object.keys(state.chats).length === 0) {
-    const id = createChat();
-    state.activeChatId = id;
-  } else {
-    // Pick most recent
-    const ids = Object.keys(state.chats).sort((a,b) => (state.chats[b].updated||0) - (state.chats[a].updated||0));
-    state.activeChatId = ids[0];
-  }
-
-  renderChatList();
-  renderChat();
-  bindEvents();
-  checkServer();
-
-  // Sync personality UI to saved preference
-  syncPersonalityUI(state.settings.personality || 'balanced');
-
-  // Focus input
-  setTimeout(() => els.userInput.focus(), 100);
-}
-
-// ── PROFILE SYSTEM ────────────────────────────────────────────────
+/* ─────────────────────────────────────────────────────────────────
+   § 26  PROFILE SYSTEM
+   ───────────────────────────────────────────────────────────────── */
 
 function initProfile() {
   const exists = loadProfile();
   if (!exists || !state.profile?.deviceId) {
-    // Generate device ID and show setup
-    const newId = generateUUID();
-    state.profile = { deviceId: newId, displayName: '', avatar: '🧠', createdAt: new Date().toISOString() };
+    state.profile = { deviceId: generateUUID(), displayName: '', avatar: '🧠', createdAt: new Date().toISOString() };
     showSetupModal();
   } else {
     renderProfileCard();
@@ -1763,9 +1945,7 @@ function initProfile() {
 }
 
 function showSetupModal() {
-  // Show the generated ID
   els.deviceIdPreview.textContent = state.profile.deviceId;
-  // Setup avatar picker
   bindAvatarGrid(els.avatarGrid, 'setup');
   els.setupOverlay.classList.add('open');
   setTimeout(() => els.setupName.focus(), 200);
@@ -1774,16 +1954,13 @@ function showSetupModal() {
     const name = els.setupName.value.trim();
     if (!name) { els.setupName.style.borderColor = 'var(--danger)'; els.setupName.focus(); return; }
     els.setupName.style.borderColor = '';
-    const selectedAvatar = els.avatarGrid.querySelector('.avatar-btn.selected')?.dataset.emoji || '🧠';
     state.profile.displayName = name;
-    state.profile.avatar = selectedAvatar;
+    state.profile.avatar      = els.avatarGrid.querySelector('.avatar-btn.selected')?.dataset.emoji || '🧠';
     saveProfile();
     els.setupOverlay.classList.remove('open');
     renderProfileCard();
     toast(`Welcome, ${name}! Your profile is saved locally. 🎉`, 'success', 4000);
   };
-
-  // Enter submits
   els.setupName.addEventListener('keydown', e => { if (e.key === 'Enter') els.completeSetupBtn.click(); });
 }
 
@@ -1796,26 +1973,22 @@ function renderProfileCard() {
 
 function openProfileModal() {
   if (!state.profile) return;
-  // Populate preview
   updateProfilePreview();
-  // Populate fields
-  els.profileNameInput.value = state.profile.displayName;
-  els.profileDeviceId.textContent = state.profile.deviceId;
-  els.profileCreatedAt.textContent = new Date(state.profile.createdAt).toLocaleString([], { dateStyle: 'long', timeStyle: 'short' });
-  // Sync avatar grid selection
+  els.profileNameInput.value        = state.profile.displayName;
+  els.profileDeviceId.textContent   = state.profile.deviceId;
+  els.profileCreatedAt.textContent  = new Date(state.profile.createdAt).toLocaleString([], { dateStyle: 'long', timeStyle: 'short' });
   bindAvatarGrid(els.profileAvatarGrid, 'profile');
   syncAvatarSelection(els.profileAvatarGrid, state.profile.avatar);
-  // Live preview on name change
   els.profileNameInput.oninput = () => updateProfilePreview();
   els.profileOverlay.classList.add('open');
 }
 
 function updateProfilePreview() {
-  const avatar = els.profileAvatarGrid?.querySelector('.avatar-btn.selected')?.data-emoji || state.profile?.avatar || '🧠';
+  const avatar = els.profileAvatarGrid?.querySelector('.avatar-btn.selected')?.dataset?.emoji || state.profile?.avatar || '🧠';
   const name   = els.profileNameInput?.value.trim() || state.profile?.displayName || 'Anonymous';
   if (els.profilePreviewAvatar) els.profilePreviewAvatar.textContent = avatar;
-  if (els.profilePreviewName)   els.profilePreviewName.textContent = name;
-  if (els.profilePreviewMeta)   els.profilePreviewMeta.textContent = shortId(state.profile?.deviceId);
+  if (els.profilePreviewName)   els.profilePreviewName.textContent   = name;
+  if (els.profilePreviewMeta)   els.profilePreviewMeta.textContent   = shortId(state.profile?.deviceId);
 }
 
 function bindAvatarGrid(grid, context) {
@@ -1831,17 +2004,14 @@ function bindAvatarGrid(grid, context) {
 
 function syncAvatarSelection(grid, emoji) {
   if (!grid) return;
-  grid.querySelectorAll('.avatar-btn').forEach(b => {
-    b.classList.toggle('selected', b.dataset.emoji === emoji);
-  });
+  grid.querySelectorAll('.avatar-btn').forEach(b => b.classList.toggle('selected', b.dataset.emoji === emoji));
 }
 
 function saveProfileChanges() {
   const name = els.profileNameInput.value.trim();
   if (!name) { toast('Display name cannot be empty', 'error'); return; }
-  const avatar = els.profileAvatarGrid.querySelector('.avatar-btn.selected')?.dataset.emoji || state.profile.avatar;
   state.profile.displayName = name;
-  state.profile.avatar = avatar;
+  state.profile.avatar      = els.profileAvatarGrid.querySelector('.avatar-btn.selected')?.dataset.emoji || state.profile.avatar;
   saveProfile();
   renderProfileCard();
   els.profileOverlay.classList.remove('open');
@@ -1849,8 +2019,7 @@ function saveProfileChanges() {
 }
 
 function exportProfile() {
-  const data = { ...state.profile, appVersion: '1.0', exportedAt: new Date().toISOString() };
-  download('prefrontal_profile.json', JSON.stringify(data, null, 2));
+  download('prefrontal_profile.json', JSON.stringify({ ...state.profile, appVersion: '1.2', exportedAt: new Date().toISOString() }, null, 2));
   toast('Profile exported as prefrontal_profile.json', 'success');
 }
 
@@ -1863,14 +2032,14 @@ function importProfile(file) {
       state.profile = {
         deviceId:    data.deviceId,
         displayName: data.displayName || 'Imported User',
-        avatar:      data.avatar || '🧠',
-        createdAt:   data.createdAt || new Date().toISOString(),
+        avatar:      data.avatar      || '🧠',
+        createdAt:   data.createdAt   || new Date().toISOString(),
       };
       saveProfile();
       renderProfileCard();
       els.profileOverlay.classList.remove('open');
       toast(`Profile imported: ${state.profile.displayName} ✓`, 'success', 4000);
-    } catch(err) {
+    } catch {
       toast('Invalid profile file. Make sure it is a prefrontal_profile.json', 'error', 5000);
     }
   };
@@ -1879,35 +2048,54 @@ function importProfile(file) {
 
 window.copyDeviceId = function() {
   if (!state.profile?.deviceId) return;
-  navigator.clipboard.writeText(state.profile.deviceId).then(() => {
-    toast('Device ID copied!', 'success');
-  });
+  navigator.clipboard.writeText(state.profile.deviceId).then(() => toast('Device ID copied!', 'success'));
 };
 
 function bindProfileEvents() {
-  // Open profile modal from sidebar card
   [els.profileCard, els.openProfileBtn].forEach(el => {
     el?.addEventListener('click', e => { e.stopPropagation(); openProfileModal(); });
   });
-  // Close
-  els.closeProfileBtn?.addEventListener('click', () => els.profileOverlay.classList.remove('open'));
+  els.closeProfileBtn?.addEventListener('click',  () => els.profileOverlay.classList.remove('open'));
   els.cancelProfileBtn?.addEventListener('click', () => els.profileOverlay.classList.remove('open'));
   els.profileOverlay?.addEventListener('click', e => { if (e.target === els.profileOverlay) els.profileOverlay.classList.remove('open'); });
-  // Save
-  els.saveProfileBtn?.addEventListener('click', saveProfileChanges);
-  // Export
-  els.exportProfileBtn?.addEventListener('click', exportProfile);
-  // Import
+  els.saveProfileBtn?.addEventListener('click',    saveProfileChanges);
+  els.exportProfileBtn?.addEventListener('click',  exportProfile);
   els.importProfileInput?.addEventListener('change', e => {
     const file = e.target.files[0];
     if (file) importProfile(file);
     e.target.value = '';
   });
-  // Setup overlay — don't close on bg click (force completion)
   els.setupOverlay?.addEventListener('click', e => e.stopPropagation());
 }
 
-document.addEventListener('DOMContentLoaded', () => {
+/* ─────────────────────────────────────────────────────────────────
+   § 27  INIT
+   ───────────────────────────────────────────────────────────────── */
+
+function init() {
+  loadSettings();
+  loadChats();
+  applyTheme(state.settings.theme);
+
+  els.modelNameDisplay.textContent = state.settings.model;
+
+  if (Object.keys(state.chats).length === 0) {
+    state.activeChatId = createChat();
+  } else {
+    const ids          = Object.keys(state.chats).sort((a, b) => (state.chats[b].updated || 0) - (state.chats[a].updated || 0));
+    state.activeChatId = ids[0];
+  }
+
+  renderChatList();
+  renderChat();
+  bindEvents();
+  checkServer();
+  syncPersonalityUI(state.settings.personality || 'balanced');
+  setTimeout(() => els.userInput.focus(), 100);
+}
+
+document.addEventListener('DOMContentLoaded', async () => {
+  await loadServerKeys(); // Load .env keys from server first
   init();
   bindProfileEvents();
   initProfile();

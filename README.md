@@ -538,6 +538,8 @@ The project must remain simple enough that anyone can open the folder and unders
 
 ---
 
+#### "Built with cloud ai,meant to beat cloud ai"
+
 ## 📄 License
 
 Prefrontal is released under the [GNU GPLv3](https://www.gnu.org/licenses/gpl-3.0.html) license.

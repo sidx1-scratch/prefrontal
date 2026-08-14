@@ -1,8 +1,9 @@
+# Keep source archives focused on the distributable application.
+# README.md, LICENSE, and .env.example remain available to users.
 google2a39946b5f941485.html export-ignore
-README.md                    export-ignore
-LICENSE                      export-ignore
-docs/                        export-ignore
-.github/                     export-ignore
-.gitattributes                     export-ignore
-tests/ export-ignore
-install.sh export-ignore
+docs/                          export-ignore
+.github/                       export-ignore
+tests/                         export-ignore
+install.sh                     export-ignore
+.gitattributes                 export-ignore
+.gitignore                     export-ignore

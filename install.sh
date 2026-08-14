@@ -29,11 +29,12 @@
 #
 # Usage:
 #   ./install.sh [target-dir]      (default target-dir: ./prefrontal)
+#   PREFRONTAL_BRANCH=features ./install.sh  # install a non-main branch
 
 set -euo pipefail
 
 REPO="sidx1-scratch/prefrontal"
-BRANCH="main"
+BRANCH="${PREFRONTAL_BRANCH:-main}"
 RAW_BASE="https://raw.githubusercontent.com/${REPO}/${BRANCH}"
 TARGET_DIR="${1:-prefrontal}"
 

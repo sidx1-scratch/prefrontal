@@ -116,30 +116,67 @@ function getApiBaseUrl() {
   return state.settings.serverUrl || rdef.defaultUrl;
 }
 
-/** Resolved API key for the current runtime:
- *  1. server-side key loaded from .env  (via /api/config)
- *  2. manual key typed in Settings UI   (state.settings.apiKey)
+/** Resolved API key for direct browser requests.
+ * Server-side keys are never returned by /api/config; requests using them
+ * are sent through /api/proxy instead.
  */
 function getApiKey() {
-  const envKey = state.settings.runtime && serverKeys[RUNTIMES[state.settings.runtime]?.keyEnvName];
-  return envKey || state.settings.apiKey || '';
+  return state.settings.apiKey || '';
 }
 
-// Keys fetched from the server's .env file at startup
+// Availability flags fetched from the server's .env file at startup.
 const serverKeys = {};
+
+function hasServerKey() {
+  const envName = RUNTIMES[state.settings.runtime]?.keyEnvName;
+  return Boolean(envName && serverKeys[envName]);
+}
+
+function shouldUseServerProxy(targetUrl) {
+  if (!isOpenAIRuntime() || !hasServerKey()) return false;
+  try {
+    const target = new URL(targetUrl, window.location.href);
+    const provider = new URL(currentRuntime().defaultUrl);
+    // Custom gateways continue to work directly with a manually entered key;
+    // only the known provider origin is sent to the server-side proxy.
+    return target.origin === provider.origin;
+  } catch {
+    return false;
+  }
+}
+
+/** Fetch a backend endpoint directly or through the hardened local proxy. */
+async function fetchBackend(targetUrl, { method = 'GET', headers = {}, body, signal } = {}) {
+  if (!shouldUseServerProxy(targetUrl)) {
+    const directOptions = { method, headers, signal };
+    if (body !== undefined) directOptions.body = typeof body === 'string' ? body : JSON.stringify(body);
+    return fetch(targetUrl, directOptions);
+  }
+
+  return fetch('/api/proxy', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      targetUrl,
+      runtime: state.settings.runtime,
+      method,
+      body,
+    }),
+    signal,
+  });
+}
 
 async function loadServerKeys() {
   try {
-    const res = await fetch('/api/config');
+    const res = await fetch('/api/config', { cache: 'no-store' });
     if (!res.ok) return;
     const data = await res.json();
     Object.assign(serverKeys, data);
-    // If server provided keys, notify the user once
     if (data.hasServerKeys) {
-      console.info('[Prefrontal] API keys loaded from server .env — no need to enter them manually.');
+      console.info('[Prefrontal] Server-side provider keys are available through the local proxy.');
     }
   } catch {
-    // Running without the proxy server (plain static file serving) — keys must be entered manually
+    // Running without the proxy server (plain static file serving).
   }
 }
 
@@ -787,7 +824,7 @@ async function sendImageGenerationRequest(prompt) {
       const key     = getApiKey();
       if (key) headers['Authorization'] = `Bearer ${key}`;
       const payload = { model: state.settings.model, prompt, n: 1, response_format: 'b64_json', size: '1024x1024' };
-      const res     = await fetch(url, { method: 'POST', headers, body: JSON.stringify(payload), signal: state.abortController.signal });
+      const res     = await fetchBackend(url, { method: 'POST', headers, body: payload, signal: state.abortController.signal });
       if (!res.ok) throw new Error(`Server error ${res.status}: ${await res.text()}`);
       const data = await res.json();
       imageSrcs   = (data.data || []).map(item => ({
@@ -1252,10 +1289,10 @@ async function sendRequest() {
     const key     = getApiKey();
     if (key && isOpenAIRuntime()) headers['Authorization'] = `Bearer ${key}`;
 
-    const response = await fetch(url, {
+    const response = await fetchBackend(url, {
       method: 'POST',
       headers,
-      body: JSON.stringify(payload),
+      body: payload,
       signal: state.abortController.signal,
     });
 
@@ -1449,7 +1486,7 @@ async function checkServer() {
     const key     = getApiKey();
     if (key && isOAI) headers['Authorization'] = `Bearer ${key}`;
 
-    const r = await fetch(url, { signal: AbortSignal.timeout(8000), headers });
+    const r = await fetchBackend(url, { method: 'GET', signal: AbortSignal.timeout(8000), headers });
     if (r.ok) {
       const data   = await r.json();
       let models   = [];

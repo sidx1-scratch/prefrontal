@@ -29,7 +29,7 @@
 
 **100% Offline · No Ads · Your Data Stays on Your Device**
 
-Prefrontal is an open-source, privacy-first chat interface for local AI models. It works with **Ollama** (desktop), **Llama.cpp** (any platform, including Android via Termux), and optionally **OpenRouter** if you'd rather skip local setup entirely. No cloud dependency, no telemetry, no subscriptions.
+Prefrontal is an open-source, privacy-first chat interface for local AI models. It works with **Ollama** (desktop), **Llama.cpp** (any platform, including Android via Termux), and optionally **OpenRouter** if you'd rather skip local setup entirely. No required cloud dependency, no telemetry, no subscriptions.
 
 🔗 **[Live demo](https://prefrontal-five.vercel.app/)** — see what the UI looks like before installing.
 
@@ -46,7 +46,7 @@ Prefrontal is an open-source, privacy-first chat interface for local AI models. 
 - [Setting Up Your AI Backend](#-setting-up-your-ai-backend)
 - [Personality Presets](#-personality-presets)
 - [Temperature Control](#️-temperature-control)
-- [Web Search (OpenRouter only)](#-web-search-openrouter-only)
+- [Web Search (OpenAI-compatible runtimes)](#-web-search-openai-compatible-runtimes)
 - [Features](#-features)
 - [Keyboard Shortcuts](#️-keyboard-shortcuts)
 - [Privacy & Data](#-privacy--data)
@@ -97,7 +97,7 @@ Open `http://localhost:3000`, go to Settings, and set:
 Done — no GPU or model download required.
 
 **Optional: turn on Web Search**
-Still in Settings, flip the **Web Search** toggle (it only appears when Runtime is set to OpenRouter). The model can then pull in live DuckDuckGo results before answering, with any sources it used shown as clickable chips under its reply. See [Web Search](#-web-search-openrouter-only) below.
+Still in Settings, flip the **Web Search** toggle when using any OpenAI-compatible runtime. The model can then pull in live DuckDuckGo results before answering, with any sources it used shown as clickable chips under its reply. See [Web Search](#-web-search-openai-compatible-runtimes) below.
 
 > [!NOTE]
 > the duckduckgo instant answer api only knows more known things so if you for example tell it to search up the prefrontal repo it wont find it because instant answer doesn't know about it. also when it searches up something it looks like this: <img width="800" height="497" alt="ScreencastFrom2026-08-0111-41-15-ezgif com-optimize" src="https://github.com/user-attachments/assets/830edd98-b72f-4517-b38b-539db35ed501" />
@@ -166,7 +166,7 @@ That's the whole process. No `git`, no GitHub account, no cloning.
 
 ### Option 2: Quick Install Script *(no Git required, fetches only the files the app needs)*
 
-Prefer not to clone the whole repo (including docs, CI workflows, and tests) just to run the app? This one-liner downloads only the runtime-required files — `app.js`, `index.html`, `style.css`, `manifest.json`, `package.json`, `package-lock.json`, and the `vendor/` libraries — straight from GitHub, no `git` involved.
+Prefer not to clone the whole repo (including docs, CI workflows, and tests) just to run the app? This one-liner downloads only the runtime-required files — `app.js`, `index.html`, `style.css`, `manifest.json`, `server.js`, `.env.example`, `package.json`, `package-lock.json`, and the `vendor/` libraries — straight from GitHub, no `git` involved.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/sidx1-scratch/prefrontal/refs/heads/main/install.sh | bash
@@ -421,20 +421,20 @@ Temperature controls how random or creative the AI's outputs are.
 
 ---
 
-## 🔎 Web Search (OpenRouter only)
+## 🔎 Web Search (OpenAI-compatible runtimes)
 
-When you're running on **OpenRouter**, Prefrontal can let the model search the live web before it answers — useful for anything newer than the model's training data, or that just needs a source. This isn't OpenRouter's own search plugin; Prefrontal implements it itself, on top of the free [DuckDuckGo Instant Answer API](https://duckduckgo.com/api), so it works with any OpenRouter model, free or paid.
+When you're running on an **OpenAI-compatible runtime**—Llama.cpp, OpenRouter, OpenAI, Groq, or Together AI—Prefrontal can let the model search the live web before it answers. This isn't a provider plugin; Prefrontal implements it itself, on top of the free [DuckDuckGo Instant Answer API](https://duckduckgo.com/api), so it works with any compatible model.
 
 **How to enable it**
-1. Settings → set Runtime to **OpenRouter**.
-2. A new **Web Search** toggle appears (it's hidden for Ollama/Llama.cpp, since those runtimes have no internet access of their own). Flip it on.
+1. Settings → set Runtime to **Llama.cpp / OpenAI-compatible**, **OpenRouter**, **OpenAI**, **Groq**, or **Together AI**.
+2. A new **Web Search** toggle appears (it is hidden for Ollama). Flip it on.
 3. Save. That's it — every message you send from then on can trigger a search when the model decides it's useful.
 
 **How it works**
 Turning the toggle on quietly appends a short instruction to the system prompt, telling the model that if it wants to search, it should reply with *only* a small JSON object — `{"search_query": "..."}` — instead of a normal answer. Prefrontal watches for that JSON: if a reply matches it, nothing is shown to you yet (you'll see a "🔎 Searching the web for…" status instead of raw JSON), Prefrontal queries DuckDuckGo directly from your browser, and feeds the results back to the model as a follow-up message so it can write the real answer. Any pages the model drew on come back as clickable source chips underneath the final reply. This whole exchange (search request → DuckDuckGo → real answer) happens automatically within a single one of your messages — capped at two search rounds so a stubborn model can't loop forever — and only the final answer is saved to your chat history.
 
 > [!NOTE]
-> Web search only applies to the OpenRouter runtime and only while the toggle is on. Ollama and Llama.cpp responses are unaffected either way, since local models have no path to the internet. Because this uses DuckDuckGo's free Instant Answer API rather than a full search index, it's strongest for facts, definitions, and well-known topics, and can come back empty for very narrow or breaking-news queries — the model is told to just answer from its own knowledge when that happens. Since this is prompt-based rather than a model-native tool-call feature, it depends on the model actually following the instruction; most capable instruction-tuned models handle it reliably, but very small/free models occasionally ignore it.
+> Web search applies to OpenAI-compatible runtimes only and only while the toggle is on. Ollama is unaffected because the feature is not enabled for that runtime. Because this uses DuckDuckGo's free Instant Answer API rather than a full search index, it's strongest for facts, definitions, and well-known topics, and can come back empty for very narrow or breaking-news queries — the model is told to just answer from its own knowledge when that happens. Since this is prompt-based rather than a model-native tool-call feature, it depends on the model actually following the instruction; most capable instruction-tuned models handle it reliably, but very small/free models occasionally ignore it.
 
 ---
 
@@ -446,8 +446,8 @@ Turning the toggle on quietly appends a short instruction to the system prompt, 
 | 🔄 Streaming | Real-time, token-by-token generation |
 | 🎭 Personality Presets | 4 built-in modes with one click |
 | 🌡️ Temperature Control | Live-sent with every request |
-| 🔎 Web Search | OpenRouter-only: prompt-driven DuckDuckGo search with clickable source citations |
-| 📚 Multi-Backend | OpenRouter (cloud), Ollama, and Llama.cpp over local or LAN |
+| 🔎 Web Search | OpenAI-compatible runtimes: prompt-driven DuckDuckGo search with clickable source citations |
+| 📚 Multi-Backend | Ollama, Llama.cpp, OpenRouter, OpenAI, Groq, and Together AI |
 | 🌐 LAN & External | Connect to dedicated AI servers on your network |
 | 💾 Multi-Chat | Unlimited saved local conversations |
 | 🔍 Search | Instant conversation search |

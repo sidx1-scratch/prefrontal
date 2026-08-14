@@ -277,7 +277,7 @@
           <label class="setting-label">API Key <span style="font-size:10.5px;font-weight:normal;color:var(--text-muted)">(Optional — use .env for security)</span></label>
           <div id="serverKeyStatus" style="display:none;font-size:12px;margin-bottom:6px;"></div>
           <input type="password" class="setting-input" id="apiKey" autocomplete="off" placeholder="sk-... (required for cloud providers)" />
-          <p class="setting-hint">For cloud providers (OpenRouter, Groq, OpenAI, Together AI), enter your API key here or set it in the <code>.env</code> file for server-side security (keys in .env are never exposed to the browser). Get a free OpenRouter key at <a href="https://openrouter.com/keys" target="_blank" style="color:var(--accent-color);text-decoration:underline">openrouter.com/keys</a>.</p>
+          <p class="setting-hint">For cloud providers (OpenRouter, Groq, OpenAI, Together AI), enter your API key here, or let the local server proxy use a key from <code>.env</code>. Server-loaded keys are never returned to the browser. Get a free OpenRouter key at <a href="https://openrouter.com/keys" target="_blank" style="color:var(--accent-color);text-decoration:underline">openrouter.com/keys</a>.</p>
         </div>
 
         <div class="setting-group" id="webSearchGroup" style="display:none">

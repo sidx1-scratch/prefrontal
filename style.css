@@ -625,7 +625,7 @@ body { display: flex; position: relative; background: transparent; z-index: 0; f
   color: var(--text-primary);
 }
 
-/* Web search sources (OpenRouter 'web' plugin citations) */
+/* Web search sources (prompt-driven DuckDuckGo citations) */
 .msg-sources {
   margin-top: 12px; padding-top: 10px;
   border-top: 1px dashed var(--border);

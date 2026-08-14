@@ -24,7 +24,7 @@ jobs:
           registry-url: https://npm.pkg.github.com/
 
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Configure Git
         run: |
@@ -33,6 +33,9 @@ jobs:
 
       - name: Bump version (patch)
         run: npm version patch -m "%s is probably stable because I tested it on my pc (no guarantees™)"
+
+      - name: Verify distributable contents
+        run: npm run test:package
 
       - name: Push commit + tags
         run: git push origin main --follow-tags
@@ -49,16 +52,6 @@ jobs:
             git log -1 --pretty=%B
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
-
-      # -----------------------
-      # CLEANUP (your logic kept intact)
-      # -----------------------
-      - name: Clean files before release & publish
-        run: |
-          rm -f google2a39946b5f941485.html
-          rm -f README.md
-          rm -f LICENSE
-          rm -rf docs/
 
       # -----------------------
       # GITHUB RELEASE

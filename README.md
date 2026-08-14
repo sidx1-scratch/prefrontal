@@ -228,8 +228,8 @@ npm install
 npm start
 ```
 If you want to contribute or just want the full Git history.
-[!TIP]
-To update later, run git pull from inside the prefrontal folder. If the dependencies changed, run npm install afterward just in case.
+>[!TIP]
+>To update later, run git pull from inside the prefrontal folder. If the dependencies changed, run npm install afterward just in case.
 
 ### Option 5: Install via GitHub Packages
 

@@ -30,15 +30,12 @@
 # Usage:
 #   ./install.sh [target-dir]      (default target-dir: ./prefrontal)
 #   PREFRONTAL_BRANCH=features ./install.sh  # install a non-main branch
-
 set -euo pipefail
-
 REPO="sidx1-scratch/prefrontal"
 BRANCH="${PREFRONTAL_BRANCH:-main}"
 RAW_BASE="https://raw.githubusercontent.com/${REPO}/${BRANCH}"
 TARGET_DIR="${1:-prefrontal}"
-
-# Files required for the app and its Express launcher.
+# Files required to run the app (no npm install needed — zero dependencies).
 REQUIRED_FILES=(
   "app.js"
   "index.html"
@@ -53,10 +50,8 @@ REQUIRED_FILES=(
   "vendor/highlight-dark.min.css"
   "vendor/highlight-light.min.css"
 )
-
 echo "Installing Prefrontal (required files only) into: ${TARGET_DIR}"
 mkdir -p "${TARGET_DIR}"
-
 for f in "${REQUIRED_FILES[@]}"; do
   dest="${TARGET_DIR}/${f}"
   mkdir -p "$(dirname "${dest}")"
@@ -70,16 +65,13 @@ for f in "${REQUIRED_FILES[@]}"; do
     exit 1
   fi
 done
-
 echo ""
 echo "Done. Installed files:"
 ( cd "${TARGET_DIR}" && find . -type f | sed 's|^\./|  |' | sort )
-
 echo ""
 echo "Next steps:"
 echo "  cd ${TARGET_DIR}"
 echo "  cp .env.example .env  # optional: configure server-side provider keys"
-echo "  npm install"
 echo "  npm start              # serves the app at http://localhost:3000"
 echo ""
 echo "Make sure a local AI backend (Ollama or Llama.cpp) is running,"

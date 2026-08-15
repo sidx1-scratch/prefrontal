@@ -6,15 +6,49 @@
 
    Serves the static frontend and proxies approved AI API calls so
    provider API keys remain server-side in .env.
+
+   Dependency-free build: uses only Node's built-in modules
+   (http, https, fs, path, url) — no express, no dotenv, no
+   node_modules required.
    ═══════════════════════════════════════════════════════════════ */
 
-require('dotenv').config();
-const express = require('express');
-const http    = require('http');
-const https   = require('https');
-const path    = require('path');
+const fs    = require('fs');
+const http  = require('http');
+const https = require('https');
+const path  = require('path');
+const { URL } = require('url');
 
-const app  = express();
+const ROOT = __dirname;
+
+// ── Minimal .env loader (replaces the `dotenv` package) ──────────
+// Mirrors dotenv's default behavior: parses KEY=VALUE lines, strips
+// surrounding quotes, ignores comments/blank lines, and never
+// overwrites a variable that's already set in the real environment.
+function loadEnv(filePath) {
+  let raw;
+  try {
+    raw = fs.readFileSync(filePath, 'utf8');
+  } catch {
+    return; // no .env file — that's fine, same as dotenv's silent no-op
+  }
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+    const eq = trimmed.indexOf('=');
+    if (eq === -1) continue;
+    const key = trimmed.slice(0, eq).trim();
+    let value = trimmed.slice(eq + 1).trim();
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    if (!(key in process.env)) process.env[key] = value;
+  }
+}
+loadEnv(path.join(ROOT, '.env'));
+
 const PORT = process.env.PORT || 3000;
 
 const PROVIDERS = {
@@ -53,10 +87,6 @@ const PROXY_RATE_LIMIT = Number.isFinite(configuredRateLimit) && configuredRateL
 const RATE_WINDOW_MS = 60 * 1000;
 const rateBuckets = new Map();
 
-// ── Middleware ───────────────────────────────────────────────────
-app.use(express.json({ limit: '50mb' }));
-app.use(express.static(path.join(__dirname)));
-
 function hasKey(envName) {
   return Boolean(process.env[envName]);
 }
@@ -78,12 +108,6 @@ function configPayload() {
     ].some(hasKey),
   };
 }
-
-// ── /api/config — exposes key availability, never key values ─────
-app.get('/api/config', (req, res) => {
-  res.set('Cache-Control', 'no-store');
-  res.json(configPayload());
-});
 
 function clientAddress(req) {
   // Do not trust forwarded headers unless this server is behind a configured,
@@ -127,23 +151,69 @@ function safeForwardHeaders(headers, apiKey) {
   return forwarded;
 }
 
-// ── /api/proxy — forward approved AI requests with server-side keys ─
-app.post('/api/proxy', (req, res) => {
+// ── Tiny JSON body reader (replaces express.json()) ───────────────
+const MAX_BODY_BYTES = 50 * 1024 * 1024; // 50mb, matches the original limit
+
+function readJsonBody(req) {
+  return new Promise((resolve, reject) => {
+    let total = 0;
+    const chunks = [];
+    req.on('data', chunk => {
+      total += chunk.length;
+      if (total > MAX_BODY_BYTES) {
+        reject(Object.assign(new Error('Request body too large'), { statusCode: 413 }));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => {
+      if (!chunks.length) { resolve(undefined); return; }
+      try {
+        resolve(JSON.parse(Buffer.concat(chunks).toString('utf8')));
+      } catch {
+        reject(Object.assign(new Error('Invalid JSON body'), { statusCode: 400 }));
+      }
+    });
+    req.on('error', reject);
+  });
+}
+
+function sendJson(res, statusCode, payload, extraHeaders) {
+  const body = JSON.stringify(payload);
+  res.writeHead(statusCode, {
+    'Content-Type': 'application/json',
+    'Content-Length': Buffer.byteLength(body),
+    ...extraHeaders,
+  });
+  res.end(body);
+}
+
+// ── /api/proxy handler — forward approved AI requests with server-side keys ─
+async function handleProxy(req, res) {
   if (!consumeRateLimit(req)) {
-    res.status(429).json({ error: 'Proxy rate limit exceeded. Try again later.' });
+    sendJson(res, 429, { error: 'Proxy rate limit exceeded. Try again later.' });
     return;
   }
 
-  const { targetUrl, runtime, method = 'POST', body } = req.body || {};
+  let payload;
+  try {
+    payload = await readJsonBody(req);
+  } catch (err) {
+    sendJson(res, err.statusCode || 400, { error: err.message });
+    return;
+  }
+
+  const { targetUrl, runtime, method = 'POST', body } = payload || {};
   if (!targetUrl || !runtime) {
-    res.status(400).json({ error: 'Missing targetUrl or runtime' });
+    sendJson(res, 400, { error: 'Missing targetUrl or runtime' });
     return;
   }
 
   const provider = PROVIDERS[runtime];
   const apiKey = provider && process.env[provider.env];
   if (!provider || !apiKey) {
-    res.status(403).json({ error: 'No server-side key is configured for this runtime' });
+    sendJson(res, 403, { error: 'No server-side key is configured for this runtime' });
     return;
   }
 
@@ -151,17 +221,17 @@ app.post('/api/proxy', (req, res) => {
   try {
     parsed = new URL(targetUrl);
   } catch {
-    res.status(400).json({ error: 'Invalid targetUrl' });
+    sendJson(res, 400, { error: 'Invalid targetUrl' });
     return;
   }
 
   const normalizedMethod = String(method).toUpperCase();
   if (!['GET', 'POST'].includes(normalizedMethod)) {
-    res.status(400).json({ error: 'Only GET and POST proxy methods are supported' });
+    sendJson(res, 400, { error: 'Only GET and POST proxy methods are supported' });
     return;
   }
   if (!isAllowedTarget(parsed, runtime)) {
-    res.status(403).json({ error: 'Proxy target is not allowed for this runtime' });
+    sendJson(res, 403, { error: 'Proxy target is not allowed for this runtime' });
     return;
   }
 
@@ -178,31 +248,130 @@ app.post('/api/proxy', (req, res) => {
     method: normalizedMethod,
     headers: reqHeaders,
   }, proxyRes => {
-    res.status(proxyRes.statusCode || 502);
-    const contentType = proxyRes.headers['content-type'] || 'application/octet-stream';
-    res.setHeader('Content-Type', contentType);
-    if (contentType.includes('text/event-stream')) {
-      res.setHeader('Cache-Control', 'no-cache, no-transform');
-      res.setHeader('X-Accel-Buffering', 'no');
-    }
+    res.writeHead(proxyRes.statusCode || 502, buildProxyResponseHeaders(proxyRes));
     proxyRes.pipe(res);
   });
 
   proxyReq.setTimeout(120000, () => proxyReq.destroy(new Error('Upstream request timed out')));
   proxyReq.on('error', err => {
-    if (!res.headersSent) res.status(502).json({ error: `Upstream request failed: ${err.message}` });
+    if (!res.headersSent) sendJson(res, 502, { error: `Upstream request failed: ${err.message}` });
   });
 
   if (bodyStr) proxyReq.write(bodyStr);
   proxyReq.end();
+}
+
+function buildProxyResponseHeaders(proxyRes) {
+  const contentType = proxyRes.headers['content-type'] || 'application/octet-stream';
+  const headers = { 'Content-Type': contentType };
+  if (contentType.includes('text/event-stream')) {
+    headers['Cache-Control'] = 'no-cache, no-transform';
+    headers['X-Accel-Buffering'] = 'no';
+  }
+  return headers;
+}
+
+// ── Static file serving (replaces express.static()) ───────────────
+const MIME_TYPES = {
+  '.html': 'text/html; charset=utf-8',
+  '.css':  'text/css; charset=utf-8',
+  '.js':   'text/javascript; charset=utf-8',
+  '.mjs':  'text/javascript; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.png':  'image/png',
+  '.jpg':  'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.svg':  'image/svg+xml',
+  '.ico':  'image/x-icon',
+  '.webp': 'image/webp',
+  '.woff': 'font/woff',
+  '.woff2':'font/woff2',
+  '.map':  'application/json; charset=utf-8',
+  '.txt':  'text/plain; charset=utf-8',
+};
+
+// Resolves a request path safely inside ROOT (blocks path traversal via ..).
+function resolveStaticPath(urlPath) {
+  const decoded = decodeURIComponent(urlPath.split('?')[0]);
+  const safeRelative = path.normalize(decoded).replace(/^(\.\.[/\\])+/, '');
+  const fullPath = path.join(ROOT, safeRelative);
+  if (!fullPath.startsWith(ROOT)) return null;
+  return fullPath;
+}
+
+function tryServeStatic(req, res) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return false;
+  if (req.url.startsWith('/api/')) return false;
+
+  const fullPath = resolveStaticPath(req.url);
+  if (!fullPath) return false;
+
+  let stat;
+  try {
+    stat = fs.statSync(fullPath);
+  } catch {
+    return false;
+  }
+  if (stat.isDirectory()) return false; // let the SPA fallback handle it
+
+  const ext = path.extname(fullPath).toLowerCase();
+  const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+  res.writeHead(200, {
+    'Content-Type': contentType,
+    'Content-Length': stat.size,
+  });
+  if (req.method === 'HEAD') { res.end(); return true; }
+  fs.createReadStream(fullPath).pipe(res);
+  return true;
+}
+
+function serveIndex(res) {
+  const indexPath = path.join(ROOT, 'index.html');
+  fs.readFile(indexPath, (err, data) => {
+    if (err) {
+      res.writeHead(500, { 'Content-Type': 'text/plain' });
+      res.end('index.html not found');
+      return;
+    }
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(data);
+  });
+}
+
+// ── Request router ─────────────────────────────────────────────────
+const server = http.createServer(async (req, res) => {
+  const pathname = req.url.split('?')[0];
+
+  try {
+    // Static assets (app.js, style.css, vendor/*, manifest.json, ...) first,
+    // matching express's middleware order.
+    if (tryServeStatic(req, res)) return;
+
+    if (pathname === '/api/config' && req.method === 'GET') {
+      sendJson(res, 200, configPayload(), { 'Cache-Control': 'no-store' });
+      return;
+    }
+
+    if (pathname === '/api/proxy' && req.method === 'POST') {
+      await handleProxy(req, res);
+      return;
+    }
+
+    // SPA fallback — any other GET/HEAD serves index.html
+    if (req.method === 'GET' || req.method === 'HEAD') {
+      serveIndex(res);
+      return;
+    }
+
+    sendJson(res, 404, { error: 'Not found' });
+  } catch (err) {
+    if (!res.headersSent) {
+      sendJson(res, 500, { error: `Internal server error: ${err.message}` });
+    }
+  }
 });
 
-// ── SPA fallback ─────────────────────────────────────────────────
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-app.listen(PORT, () => {
+server.listen(PORT, () => {
   console.log(`\n  🧠 Prefrontal is running at http://localhost:${PORT}`);
   console.log('  Server-side API keys configured:');
   for (const [runtime, provider] of Object.entries(PROVIDERS)) {

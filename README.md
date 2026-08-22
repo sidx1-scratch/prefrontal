@@ -546,5 +546,5 @@ Prefrontal is released under the [GNU GPLv3](https://www.gnu.org/licenses/gpl-3.
 
 ---
 
-#### "Built with cloud ai,meant to beat cloud ai"
+#### “Built with cloud AI. Designed for local AI.”
 ---

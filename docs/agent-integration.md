@@ -88,11 +88,18 @@ over Server-Sent Events; the protocol is documented in the
 
 See the agent repo's `docs/SECURITY.md` for the full threat model.
 
+## Tasks (built-in LLM planner)
+
+The agent includes a `task` loop (`llm/planner.js`): point it at any
+OpenAI-compatible model and send natural-language goals that it turns into
+tool calls (`run`, `read`, `write`, …). Progress streams through the normal
+relay (`message`/`output` events), and every tool call still goes through
+the same permission gate — so the web panel can run
+`task scaffold a Flask app` and watch it work, answering permission
+prompts inline. Configure with `llm set-model` / `set-url` / `set-key`.
+
 ## What's intentionally NOT included
 
-- **LLM task loop**: the agent currently executes tool commands
-  (`run`, `read`, `write`, …) directly. A future milestone adds a
-  natural-language task layer that maps an AI's intent to these tools.
 - **WebSocket transport**: SSE + POST keeps everything dependency-free;
   a WebSocket transport can replace it behind the same relay interface.
 - **File browser / workspace picker in the UI**: commands cover file

@@ -137,6 +137,16 @@
           <span class="model-dot"></span>
           <span id="modelNameDisplay">gemma4:e2b</span>
         </div>
+        <button class="btn-icon" id="agentBtn" title="Prefrontal Agent">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
+            <rect x="4" y="8" width="16" height="12" rx="2" />
+            <path d="M12 8V4" />
+            <circle cx="12" cy="2.5" r="1.5" />
+            <path d="M9 13h.01M15 13h.01" stroke-linecap="round" />
+            <path d="M9 17h6" />
+          </svg>
+        </button>
         <button class="btn-icon" id="settingsBtn" title="Settings">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
             stroke-linejoin="round">
@@ -590,10 +600,88 @@
     </div>
   </div>
 
+  <!-- ── PREFRONTAL AGENT PANEL ── -->
+  <div class="modal-overlay" id="agentOverlay">
+    <div class="modal agent-modal" id="agentModal">
+      <div class="modal-header">
+        <h2>Prefrontal Agent</h2>
+        <button class="btn-icon" id="agentClose" title="Close">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
+            <line x1="18" y1="6" x2="6" y2="18" />
+            <line x1="6" y1="6" x2="18" y2="18" />
+          </svg>
+        </button>
+      </div>
+      <div class="modal-body">
+
+        <div class="agent-status-row">
+          <span class="agent-status-pill offline" id="agentStatusPill">Offline</span>
+          <span class="agent-name" id="agentNameEl">—</span>
+          <span class="agent-workspace" id="agentWorkspaceEl"></span>
+        </div>
+
+        <!-- Pairing -->
+        <div class="setting-group" id="pairingBox">
+          <div id="pairIdle">
+            <p class="setting-hint">Pair this web client with a local Prefrontal Agent. The agent dials
+              <strong>out</strong> to this server — no ports to forward, no firewall changes. Commands run in the
+              agent's Podman sandbox, scoped to its workspace.</p>
+            <button class="btn-primary" id="pairBtn">Pair new agent</button>
+          </div>
+          <div id="pairActive" style="display:none">
+            <label class="setting-label">Pairing token <span class="setting-hint">(valid 5 min · single use)</span></label>
+            <div class="agent-token-box">
+              <code id="pairTokenValue"></code>
+              <button class="btn-secondary" id="copyTokenBtn">Copy</button>
+            </div>
+            <p class="setting-hint">In the agent terminal run <code>prefrontal-agent pair &lt;token&gt;</code>
+              (or <code>pair &lt;token&gt;</code> inside its REPL). Waiting for the agent…</p>
+            <button class="btn-secondary" id="pairCancelBtn">Cancel</button>
+          </div>
+        </div>
+
+        <!-- Commands -->
+        <div class="setting-group" id="commandBox" style="display:none">
+          <label class="setting-label">Command</label>
+          <div class="agent-command-row">
+            <textarea id="agentCommand" rows="2" autocomplete="off" spellcheck="false"
+              placeholder="run npm test — or read / write / list / mkdir / rename / delete / status / help"></textarea>
+            <button class="send-btn" id="agentSendBtn" title="Send (Ctrl+Enter)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                stroke-linejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13" />
+                <polygon points="22 2 15 22 11 13 2 9 22 2" />
+              </svg>
+            </button>
+            <button class="btn-secondary" id="agentStopBtn" style="display:none">Stop</button>
+          </div>
+          <p class="setting-hint">Start with <code>!</code> for a shell command: <code>!npm test</code>. Multi-line file
+            write: <code>write src/app.js</code>⏎<code>file content here</code>.</p>
+        </div>
+
+        <!-- Streamed log -->
+        <div class="agent-log" id="agentLog"></div>
+
+        <!-- Permission prompt -->
+        <div class="agent-perm-banner" id="permBanner" style="display:none">
+          <span id="permText"></span>
+          <button class="btn-primary" id="permAllowBtn">Allow</button>
+          <button class="btn-secondary" id="permDenyBtn">Deny</button>
+        </div>
+
+      </div>
+      <div class="modal-footer">
+        <button class="btn-secondary danger" id="agentDisconnectBtn" style="display:none">Disconnect &amp; forget session</button>
+      </div>
+    </div>
+  </div>
+
   <!-- Local vendor libs (no internet required) -->
   <script src="vendor/marked.min.js"></script>
   <script src="vendor/highlight.min.js"></script>
   <script src="app.js"></script>
+  <script src="agent.js"></script>
 </body>
 
 </html>

@@ -16,6 +16,7 @@ const fs    = require('fs');
 const http  = require('http');
 const https = require('https');
 const path  = require('path');
+const crypto = require('crypto');
 const { URL } = require('url');
 
 const ROOT = __dirname;
@@ -271,6 +272,281 @@ function buildProxyResponseHeaders(proxyRes) {
   return headers;
 }
 
+// ── Prefrontal Agent relay (dependency-free) ──────────────────────
+// Bridges the local Prefrontal Agent and the browser UI over plain
+// HTTP + Server-Sent Events. The agent maintains an OUTBOUND
+// authenticated stream to this server (no inbound ports anywhere),
+// and the UI subscribes to a stream keyed to the same session.
+// Session state lives in memory: restarting the server clears it and
+// the agent re-pairs.
+
+const PAIR_TOKEN_TTL_MS = 5 * 60 * 1000;
+const AGENT_HEARTBEAT_MS = 15 * 1000;
+const MAX_QUEUED_COMMANDS = 20;
+const pendingPairTokens = new Map(); // pairingToken -> { createdAt, sessionId }
+const agentSessions = new Map();     // sessionId -> session
+
+function genToken() {
+  return crypto.randomBytes(24).toString('hex');
+}
+
+function sweepPairingTokens() {
+  const now = Date.now();
+  for (const [token, pending] of pendingPairTokens) {
+    if (now - pending.createdAt > PAIR_TOKEN_TTL_MS) pendingPairTokens.delete(token);
+  }
+}
+
+function readBearer(req) {
+  const header = req.headers.authorization || '';
+  const match = header.match(/^Bearer\s+(\S+)$/i);
+  return match ? match[1] : null;
+}
+
+// Find a session by its long-lived session token.
+function sessionFromRequest(req) {
+  const token = readBearer(req);
+  if (!token) return null;
+  for (const session of agentSessions.values()) {
+    if (session.token === token) return session;
+  }
+  return null;
+}
+
+function requireAgentSession(req, res) {
+  const session = sessionFromRequest(req);
+  if (!session) {
+    sendJson(res, 401, { error: 'Not authenticated' });
+    return null;
+  }
+  return session;
+}
+
+function sendSSE(res, payload) {
+  if (res.writableEnded) return;
+  res.write(`data: ${JSON.stringify(payload)}\n\n`);
+}
+
+function openSSE(res) {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache, no-transform',
+    'Connection': 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  });
+  if (res.flushHeaders) res.flushHeaders();
+}
+
+function broadcastToUI(session, payload) {
+  for (const res of session.uiStreams) sendSSE(res, payload);
+}
+
+function closeSession(sessionId) {
+  const session = agentSessions.get(sessionId);
+  if (!session) return false;
+  if (session.agentRes) { try { session.agentRes.end(); } catch {} }
+  for (const res of session.uiStreams) { try { res.end(); } catch {} }
+  agentSessions.delete(sessionId);
+  return true;
+}
+
+// Browser: create a short-lived, single-use pairing token.
+function handleAgentPair(req, res) {
+  sweepPairingTokens();
+  if (pendingPairTokens.size >= 10) {
+    sendJson(res, 429, { error: 'Too many pending pairing tokens. Wait a moment.' });
+    return;
+  }
+  const token = genToken();
+  pendingPairTokens.set(token, { createdAt: Date.now(), sessionId: null });
+  sendJson(res, 200, { token, expiresIn: PAIR_TOKEN_TTL_MS / 1000 }, { 'Cache-Control': 'no-store' });
+}
+
+// Agent: exchange a pairing token for a persistent session.
+async function handleAgentPairConfirm(req, res) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch (err) {
+    sendJson(res, err.statusCode || 400, { error: err.message });
+    return;
+  }
+  const { token, agentName } = body || {};
+  const pending = token && pendingPairTokens.get(token);
+  if (!pending || Date.now() - pending.createdAt > PAIR_TOKEN_TTL_MS) {
+    if (pending) pendingPairTokens.delete(token);
+    sendJson(res, 401, { error: 'Invalid or expired pairing token' });
+    return;
+  }
+  if (pending.sessionId) {
+    // Single-use: this pairing token was already exchanged for a session.
+    // The entry is kept so the browser's pairing status poll can report
+    // 'paired' — but it can never be exchanged again.
+    sendJson(res, 401, { error: 'Pairing token already used' });
+    return;
+  }
+  const sessionId = genToken();
+  const session = {
+    sessionId,
+    token: genToken(),
+    agentName: String(agentName || 'prefrontal-agent').slice(0, 64),
+    agentInfo: null,
+    connected: false,
+    agentRes: null,
+    uiStreams: new Set(),
+    queue: [],
+    createdAt: Date.now(),
+  };
+  agentSessions.set(sessionId, session);
+  pending.sessionId = sessionId;
+  sendJson(res, 200, { sessionId, token: session.token });
+}
+
+// Browser (polled while pairing): waiting / paired / expired.
+function handleAgentPairStatus(req, res) {
+  const token = new URL(req.url, 'http://localhost').searchParams.get('token');
+  const pending = token && pendingPairTokens.get(token);
+  if (!pending) {
+    sendJson(res, 404, { error: 'Unknown pairing token' });
+    return;
+  }
+  if (Date.now() - pending.createdAt > PAIR_TOKEN_TTL_MS) {
+    pendingPairTokens.delete(token);
+    sendJson(res, 200, { status: 'expired' });
+    return;
+  }
+  if (!pending.sessionId) {
+    sendJson(res, 200, { status: 'waiting' });
+    return;
+  }
+  const session = agentSessions.get(pending.sessionId);
+  if (!session) {
+    pendingPairTokens.delete(token);
+    sendJson(res, 404, { error: 'Session no longer exists' });
+    return;
+  }
+  sendJson(res, 200, { status: 'paired', sessionId: pending.sessionId, token: session.token });
+}
+
+// Agent's outbound SSE stream. Holds the connection, flushes queued
+// commands, and reports connection state changes to the UI streams.
+function handleAgentStream(req, res, session) {
+  openSSE(res);
+  session.agentRes = res;
+  session.connected = true;
+  broadcastToUI(session, { type: 'status', status: 'connected', ...(session.agentInfo || {}) });
+  for (const command of session.queue.splice(0)) sendSSE(res, { type: 'command', command });
+  const heartbeat = setInterval(() => sendSSE(res, { type: 'ping' }), AGENT_HEARTBEAT_MS);
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    if (session.agentRes === res) {
+      session.agentRes = null;
+      session.connected = false;
+      broadcastToUI(session, { type: 'status', status: 'disconnected' });
+    }
+  });
+}
+
+// Browser's SSE stream for a session.
+function handleUIStream(req, res, session) {
+  openSSE(res);
+  session.uiStreams.add(res);
+  sendSSE(res, {
+    type: 'hello',
+    sessionId: session.sessionId,
+    agentName: session.agentName,
+    connected: session.connected,
+    workspace: (session.agentInfo && session.agentInfo.workspace) || null,
+  });
+  const heartbeat = setInterval(() => sendSSE(res, { type: 'ping' }), AGENT_HEARTBEAT_MS);
+  req.on('close', () => {
+    clearInterval(heartbeat);
+    session.uiStreams.delete(res);
+  });
+}
+
+// Browser: send a tool command to the agent (queued while offline).
+async function handleAgentCommand(req, res, session) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch (err) {
+    sendJson(res, err.statusCode || 400, { error: err.message });
+    return;
+  }
+  const command = body && body.command;
+  if (typeof command !== 'string' || !command.trim()) {
+    sendJson(res, 400, { error: 'Missing command' });
+    return;
+  }
+  const trimmed = command.slice(0, 10000);
+  if (session.connected && session.agentRes) {
+    sendSSE(session.agentRes, { type: 'command', command: trimmed });
+  } else {
+    if (session.queue.length >= MAX_QUEUED_COMMANDS) {
+      sendJson(res, 429, { error: 'Agent is offline and the command queue is full' });
+      return;
+    }
+    session.queue.push(trimmed);
+  }
+  sendJson(res, 200, { queued: !session.connected });
+}
+
+// Agent: report events, broadcast to every connected UI stream.
+async function handleAgentEvents(req, res, session) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch (err) {
+    sendJson(res, err.statusCode || 400, { error: err.message });
+    return;
+  }
+  const events = Array.isArray(body && body.events) ? body.events : [];
+  for (const event of events) {
+    if (!event || typeof event.type !== 'string') continue;
+    if (event.type === 'status') session.agentInfo = event;
+    broadcastToUI(session, event);
+  }
+  sendJson(res, 200, { ok: true, broadcast: events.length });
+}
+
+// Browser: answer an agent permission prompt.
+async function handlePermissionResponse(req, res, session) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch (err) {
+    sendJson(res, err.statusCode || 400, { error: err.message });
+    return;
+  }
+  const { requestId, granted } = body || {};
+  if (!requestId) {
+    sendJson(res, 400, { error: 'Missing requestId' });
+    return;
+  }
+  if (!session.connected || !session.agentRes) {
+    sendJson(res, 409, { error: 'Agent is offline' });
+    return;
+  }
+  sendSSE(session.agentRes, { type: 'permission-response', requestId, granted: Boolean(granted) });
+  sendJson(res, 200, { ok: true });
+}
+
+function handleAgentRevoke(req, res, session) {
+  closeSession(session.sessionId);
+  sendJson(res, 200, { ok: true });
+}
+
+function handleAgentSessionInfo(req, res, session) {
+  sendJson(res, 200, {
+    sessionId: session.sessionId,
+    agentName: session.agentName,
+    connected: session.connected,
+    workspace: (session.agentInfo && session.agentInfo.workspace) || null,
+    pairedAt: session.createdAt,
+  }, { 'Cache-Control': 'no-store' });
+}
+
 // ── Static file serving (replaces express.static()) ───────────────
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -354,6 +630,55 @@ const server = http.createServer(async (req, res) => {
 
     if (pathname === '/api/proxy' && req.method === 'POST') {
       await handleProxy(req, res);
+      return;
+    }
+
+    // ── Prefrontal Agent relay ──
+    if (pathname === '/api/agent/pair' && req.method === 'POST') {
+      handleAgentPair(req, res);
+      return;
+    }
+    if (pathname === '/api/agent/pair/confirm' && req.method === 'POST') {
+      await handleAgentPairConfirm(req, res);
+      return;
+    }
+    if (pathname === '/api/agent/pair/status' && req.method === 'GET') {
+      handleAgentPairStatus(req, res);
+      return;
+    }
+    if (pathname === '/api/agent/stream' && req.method === 'GET') {
+      const session = requireAgentSession(req, res);
+      if (session) handleUIStream(req, res, session);
+      return;
+    }
+    if (pathname === '/api/agent/agent-stream' && req.method === 'GET') {
+      const session = requireAgentSession(req, res);
+      if (session) handleAgentStream(req, res, session);
+      return;
+    }
+    if (pathname === '/api/agent/command' && req.method === 'POST') {
+      const session = requireAgentSession(req, res);
+      if (session) await handleAgentCommand(req, res, session);
+      return;
+    }
+    if (pathname === '/api/agent/events' && req.method === 'POST') {
+      const session = requireAgentSession(req, res);
+      if (session) await handleAgentEvents(req, res, session);
+      return;
+    }
+    if (pathname === '/api/agent/permission-response' && req.method === 'POST') {
+      const session = requireAgentSession(req, res);
+      if (session) await handlePermissionResponse(req, res, session);
+      return;
+    }
+    if (pathname === '/api/agent/revoke' && req.method === 'POST') {
+      const session = requireAgentSession(req, res);
+      if (session) handleAgentRevoke(req, res, session);
+      return;
+    }
+    if (pathname === '/api/agent/session' && req.method === 'GET') {
+      const session = requireAgentSession(req, res);
+      if (session) handleAgentSessionInfo(req, res, session);
       return;
     }
 

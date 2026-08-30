@@ -11,11 +11,13 @@
     "start": "node server.js",
     "dev": "node server.js",
     "test:package": "node tests/package-contents.js",
-    "test:proxy": "node tests/proxy-smoke.js"
+    "test:proxy": "node tests/proxy-smoke.js",
+    "test:agent": "node tests/agent-relay-smoke.js"
   },
   "dependencies": {},
   "files": [
     "app.js",
+    "agent.js",
     "server.js",
     "index.html",
     "style.css",

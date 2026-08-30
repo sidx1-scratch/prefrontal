@@ -37,6 +37,7 @@ RAW_BASE="https://raw.githubusercontent.com/${REPO}/${BRANCH}"
 TARGET_DIR="${1:-prefrontal}"
 # Files required to run the app (no npm install needed — zero dependencies).
 REQUIRED_FILES=(
+  "agent.js"
   "app.js"
   "index.html"
   "style.css"

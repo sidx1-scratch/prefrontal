@@ -7,3 +7,6 @@ node_modules/
 # Logs
 *.log
 npm-debug.log*
+
+# The Prefrontal Agent lives in its own repository (github.com/sidx1-scratch/prefrontal-agent).
+agent/

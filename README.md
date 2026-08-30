@@ -48,6 +48,7 @@ Prefrontal is an open-source, privacy-first chat interface for local AI models. 
 - [Temperature Control](#️-temperature-control)
 - [Web Search (OpenAI-compatible runtimes)](#-web-search-openai-compatible-runtimes)
 - [Features](#-features)
+- [Prefrontal Agent (coding agent)](#-prefrontal-agent-coding-agent)
 - [Keyboard Shortcuts](#️-keyboard-shortcuts)
 - [Privacy & Data](#-privacy--data)
 - [Troubleshooting](#-troubleshooting)
@@ -464,6 +465,37 @@ Turning the toggle on quietly appends a short instruction to the system prompt, 
 | 🧑 Local Profile | Device identity stored locally — no accounts |
 | 📤 Export | Export chats as Markdown, profile as JSON |
 | 🔒 100% Private | Zero network calls except to your own model server |
+
+---
+
+## 🤖 Prefrontal Agent (coding agent)
+
+Prefrontal also ships a **coding-agent panel**: pair with the
+[Prefrontal Agent](https://github.com/sidx1-scratch/prefrontal-agent) —
+a separate, zero-dependency local agent that runs commands inside an
+**isolated Podman sandbox** and keeps filesystem access scoped to an
+approved workspace — and drive it from this UI. Output streams live,
+permission prompts (e.g. `network`) appear inline, and the agent dials
+**out** to this server, so no ports need forwarding.
+
+```bash
+# 1. Install the agent (separate repo, zero npm deps)
+git clone https://github.com/sidx1-scratch/prefrontal-agent
+cd prefrontal-agent
+node cli/index.js          # REPL — select a workspace, build the sandbox image
+
+# 2. Pair from the web UI
+#    Open the Agent panel (robot icon) → Pair new agent → copy the token
+prefrontal> pair <token>
+
+# 3. Drive it from the panel, e.g.
+#    run npm test | write src/app.js⏎content | list src
+```
+
+The integration adds **no dependencies** to this project — the relay in
+`server.js` uses only Node built-ins and `agent.js` is plain vanilla JS.
+See [docs/agent-integration.md](docs/agent-integration.md) for the full
+guide, security model, and relay protocol.
 
 ---
 

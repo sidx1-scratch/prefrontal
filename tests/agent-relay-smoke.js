@@ -208,6 +208,41 @@ async function main() {
     assert.strictEqual(JSON.parse(info.body).agentName, 'ci-agent');
     assert.strictEqual(JSON.parse(info.body).workspace, '/tmp/ci');
 
+    // 11a. Model selection: the browser reports it, the agent reads it.
+    const noModel = await request(appPort, 'GET', '/api/agent/model-state', undefined, sessionToken);
+    assert.strictEqual(noModel.status, 404);
+    const setModel = await request(appPort, 'POST', '/api/agent/model-state', {
+      runtime: 'openrouter',
+      model: 'mistralai/mistral-7b-instruct:free',
+      serverUrl: 'http://localhost:3000',
+    }, sessionToken);
+    assert.strictEqual(setModel.status, 200);
+    const getModel = await request(appPort, 'GET', '/api/agent/model-state', undefined, sessionToken);
+    assert.strictEqual(getModel.status, 200);
+    assert.strictEqual(JSON.parse(getModel.body).runtime, 'openrouter');
+    assert.strictEqual(JSON.parse(getModel.body).model, 'mistralai/mistral-7b-instruct:free');
+
+    // 11b. The agent LLM proxy rejects non-OpenRouter runtimes.
+    const llmReject = await request(appPort, 'POST', '/api/agent/llm', {
+      runtime: 'ollama',
+      model: 'llama3',
+      messages: [{ role: 'user', content: 'hi' }],
+    }, sessionToken);
+    assert.strictEqual(llmReject.status, 403);
+    assert.match(JSON.parse(llmReject.body).error, /OpenRouter only/i);
+
+    // 11c. The agent LLM proxy requires a server-side OpenRouter key. When one
+    // IS configured it makes a real upstream request (skipped here); when it is
+    // not, it refuses cleanly instead of calling out.
+    if (!process.env.OPENROUTER_API_KEY) {
+      const llmNoKey = await request(appPort, 'POST', '/api/agent/llm', {
+        runtime: 'openrouter',
+        model: 'mistralai/mistral-7b-instruct:free',
+        messages: [{ role: 'user', content: 'hi' }],
+      }, sessionToken);
+      assert.strictEqual(llmNoKey.status, 403);
+    }
+
     // 12. Revocation: session gone, old token rejected.
     const revoke = await request(appPort, 'POST', '/api/agent/revoke', {}, sessionToken);
     assert.strictEqual(revoke.status, 200);

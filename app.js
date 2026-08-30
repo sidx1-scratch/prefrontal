@@ -512,6 +512,17 @@ function renderMarkdown(text) {
   return html;
 }
 
+// Expose the UI's current model selection so the agent panel (agent.js) can
+// report it to the server. This keeps the agent's `task` planner in sync with
+// exactly what the user has selected in the Prefrontal UI.
+window.getPrefrontalModelState = function () {
+  return {
+    runtime: state.settings.runtime || '',
+    model: state.settings.model || '',
+    serverUrl: state.settings.serverUrl || '',
+  };
+};
+
 window.copyCode = function(btn) {
   const code = btn.closest('pre').querySelector('code');
   navigator.clipboard.writeText(code.innerText).then(() => {

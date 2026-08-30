@@ -68,6 +68,9 @@ Browser (agent.js panel)          Local Agent (prefrontal-agent)
 | `POST /permission-response` | browser | answer an agent permission prompt |
 | `POST /revoke` | either | delete the session, close all its streams |
 | `GET /session` | browser | session state (reconnect validation) |
+| `POST /model-state` | browser | report the UI's current runtime/model for the session |
+| `GET /model-state` | agent | read the model the UI selected for this session |
+| `POST /llm` | agent | proxy a chat-completion to OpenRouter (key stays server-side) |
 
 All endpoints except `pair`/`pair/status` require
 `Authorization: Bearer <session-token>`. Events are JSON `data:` frames
@@ -97,6 +100,15 @@ relay (`message`/`output` events), and every tool call still goes through
 the same permission gate — so the web panel can run
 `task scaffold a Flask app` and watch it work, answering permission
 prompts inline. Configure with `llm set-model` / `set-url` / `set-key`.
+
+By default, when the agent is paired, `task` uses the model currently
+selected in the Prefrontal UI: the browser reports it via
+`POST /api/agent/model-state`, the agent reads it with
+`GET /api/agent/model-state`, and the chat-completion is proxied by the
+backend (`POST /api/agent/llm`) so the OpenRouter key stays in `.env` and
+never reaches the agent. OpenRouter is the only supported runtime for this
+path so far; Ollama support is planned later. Use `llm set-mode local` on
+the agent to fall back to a local URL/key/model instead.
 
 ## What's intentionally NOT included
 

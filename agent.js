@@ -75,6 +75,20 @@
     saveSession();
   }
 
+  // Report the UI's current model selection to the server for this session
+  // (the model lives in app.js -> window.getPrefrontalModelState). The agent
+  // reads it so its `task` planner uses the same model as the chat UI.
+  async function reportModelState() {
+    if (!state.session) return;
+    const ms = typeof window.getPrefrontalModelState === 'function' ? window.getPrefrontalModelState() : null;
+    if (!ms || !ms.runtime || !ms.model) return;
+    try {
+      await api('/api/agent/model-state', { method: 'POST', body: JSON.stringify(ms) });
+    } catch (err) {
+      // Not critical — the agent just keeps its own model.
+    }
+  }
+
   // ── UI state ────────────────────────────────────────────────────
 
   function setStatus(connected, text) {
@@ -160,6 +174,7 @@
       showPairedUI();
       logLine('ok', 'Paired with the agent. Sending `status`…');
       openStream();
+      reportModelState();
       await sendCommand('status');
     } catch (err) {
       // Server may have restarted — keep polling briefly.
@@ -306,6 +321,7 @@
     if (!state.session) return;
     const text = String(command).trim();
     if (!text) return;
+    reportModelState();
     try {
       await api('/api/agent/command', { method: 'POST', body: JSON.stringify({ command: text }) });
     } catch (err) {
@@ -359,6 +375,7 @@
         setStatus(info.connected, info.connected ? 'Connected' : 'Offline');
         showPairedUI();
         openStream();
+        reportModelState();
       } catch {
         clearSession();
         showPairingUI();

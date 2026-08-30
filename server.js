@@ -395,6 +395,9 @@ async function handleAgentPairConfirm(req, res) {
     agentRes: null,
     uiStreams: new Set(),
     queue: [],
+    // Model selection + runtime reported by the web UI for this session.
+    // The agent reads this so `task` uses exactly the model picked in the UI.
+    modelState: null, // { runtime, model, serverUrl }
     createdAt: Date.now(),
   };
   agentSessions.set(sessionId, session);
@@ -543,8 +546,124 @@ function handleAgentSessionInfo(req, res, session) {
     agentName: session.agentName,
     connected: session.connected,
     workspace: (session.agentInfo && session.agentInfo.workspace) || null,
+    modelState: session.modelState,
     pairedAt: session.createdAt,
   }, { 'Cache-Control': 'no-store' });
+}
+
+// Browser: report the model selection currently active in the web UI for
+// this session. The agent reads it (GET below) so its `task` planner uses
+// exactly the model picked in the UI.
+async function handleAgentModelStateSet(req, res, session) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch (err) {
+    sendJson(res, err.statusCode || 400, { error: err.message });
+    return;
+  }
+  const runtime = body && body.runtime ? String(body.runtime).slice(0, 32) : null;
+  const model = body && body.model ? String(body.model).slice(0, 256) : null;
+  if (!runtime || !model) {
+    sendJson(res, 400, { error: 'runtime and model are required' });
+    return;
+  }
+  session.modelState = {
+    runtime,
+    model,
+    serverUrl: body.serverUrl ? String(body.serverUrl).slice(0, 512) : null,
+  };
+  broadcastToUI(session, { type: 'model-state', runtime, model });
+  sendJson(res, 200, { ok: true, runtime, model });
+}
+
+// Agent: read the model selection currently active in the web UI.
+function handleAgentModelStateGet(req, res, session) {
+  if (!session.modelState) {
+    sendJson(res, 404, { error: 'No model is selected in the Prefrontal UI yet' });
+    return;
+  }
+  sendJson(res, 200, session.modelState);
+}
+
+// Agent: run a chat-completion through the server so the API key stays in
+// .env and is never sent to the agent. Currently OpenRouter only — Ollama
+// support is planned later.
+async function handleAgentLlm(req, res, session) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch (err) {
+    sendJson(res, err.statusCode || 400, { error: err.message });
+    return;
+  }
+  const { runtime, model, messages, temperature } = body || {};
+  if (runtime !== 'openrouter') {
+    sendJson(res, 403, {
+      error: `Prefrontal agent integration currently supports OpenRouter only (got runtime "${runtime || 'none'}"). Ollama support is coming later.`,
+    });
+    return;
+  }
+  if (!hasKey('OPENROUTER_API_KEY')) {
+    sendJson(res, 403, { error: 'No OPENROUTER_API_KEY is configured in the server .env' });
+    return;
+  }
+  if (!model || !Array.isArray(messages) || messages.length === 0) {
+    sendJson(res, 400, { error: 'model and messages are required' });
+    return;
+  }
+
+  const provider = PROVIDERS.openrouter;
+  const upstream = {
+    hostname: provider.origin.replace(/^https?:\/\//, ''),
+    protocol: 'https:',
+    port: 443,
+  };
+  const pathPrefix = provider.pathPrefix || '/api/v1';
+  const bodyStr = JSON.stringify({
+    model,
+    messages,
+    temperature: temperature == null ? 0.3 : temperature,
+  });
+
+  const proxyReq = https.request({
+    hostname: upstream.hostname,
+    port: upstream.port,
+    path: `${pathPrefix}/chat/completions`,
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Content-Length': Buffer.byteLength(bodyStr),
+      Authorization: `Bearer ${process.env.OPENROUTER_API_KEY}`,
+    },
+  }, proxyRes => {
+    let chunks = '';
+    proxyRes.setEncoding('utf8');
+    proxyRes.on('data', c => { chunks += c; });
+    proxyRes.on('end', () => {
+      let content = '';
+      try {
+        const data = JSON.parse(chunks);
+        content = data.choices && data.choices[0] && data.choices[0].message
+          ? String(data.choices[0].message.content || '')
+          : '';
+        if (!content && data.error) content = `OpenRouter error: ${JSON.stringify(data.error)}`;
+      } catch (e) {
+        content = `OpenRouter returned non-JSON: ${chunks.slice(0, 500)}`;
+      }
+      if (proxyRes.statusCode >= 400) {
+        sendJson(res, proxyRes.statusCode, { error: content || `OpenRouter returned ${proxyRes.statusCode}` });
+      } else {
+        sendJson(res, 200, { content, model, runtime });
+      }
+    });
+  });
+  proxyReq.setTimeout(120000, () => proxyReq.destroy(new Error('Upstream request timed out')));
+  proxyReq.on('error', err => {
+    if (!res.headersSent) sendJson(res, 502, { error: `Upstream request failed: ${err.message}` });
+  });
+  proxyReq.write(bodyStr);
+  proxyReq.end();
 }
 
 // ── Static file serving (replaces express.static()) ───────────────
@@ -679,6 +798,21 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/api/agent/session' && req.method === 'GET') {
       const session = requireAgentSession(req, res);
       if (session) handleAgentSessionInfo(req, res, session);
+      return;
+    }
+    if (pathname === '/api/agent/model-state' && req.method === 'POST') {
+      const session = requireAgentSession(req, res);
+      if (session) await handleAgentModelStateSet(req, res, session);
+      return;
+    }
+    if (pathname === '/api/agent/model-state' && req.method === 'GET') {
+      const session = requireAgentSession(req, res);
+      if (session) handleAgentModelStateGet(req, res, session);
+      return;
+    }
+    if (pathname === '/api/agent/llm' && req.method === 'POST') {
+      const session = requireAgentSession(req, res);
+      if (session) await handleAgentLlm(req, res, session);
       return;
     }
 

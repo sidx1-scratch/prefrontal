@@ -108,7 +108,12 @@ async function main() {
 
   const child = spawn(process.execPath, ['server.js'], {
     cwd: root,
-    env: { ...process.env, PORT: String(appPort) },
+    env: {
+      ...process.env,
+      PORT: String(appPort),
+      // Keep the shared-secret flow isolated from any real ~/.prefrontal-agent
+      PREFRONTAL_SHARED_SECRET: 'ci-shared-secret',
+    },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
   let stderr = '';
@@ -242,6 +247,31 @@ async function main() {
       }, sessionToken);
       assert.strictEqual(llmNoKey.status, 403);
     }
+
+    // 11d-1. Ask-user: a browser answer is forwarded to the agent stream.
+    const ask = await request(appPort, 'POST', '/api/agent/ask-response', {
+      requestId: 'ask-1', answer: 'python',
+    }, sessionToken);
+    assert.strictEqual(ask.status, 200);
+    await waitFor(() => agentStream.events.some(e => e.type === 'ask-response'), 'ask-response to agent');
+    const askEvent = agentStream.events.find(e => e.type === 'ask-response');
+    assert.strictEqual(askEvent.requestId, 'ask-1');
+    assert.strictEqual(askEvent.answer, 'python');
+
+    // 11d-2. Auto-pair: wrong secret rejected, correct secret (localhost) works.
+    const autoWrong = await request(appPort, 'POST', '/api/agent/auto-pair', {
+      secret: 'nope', agentName: 'ci-agent',
+    });
+    assert.strictEqual(autoWrong.status, 401);
+    const autoGood = await request(appPort, 'POST', '/api/agent/auto-pair', {
+      secret: 'ci-shared-secret', agentName: 'ci-agent',
+    });
+    assert.strictEqual(autoGood.status, 200);
+    const autoSession = JSON.parse(autoGood.body);
+    assert.ok(autoSession.sessionId && autoSession.token);
+    // A fresh auto-paired token can authenticate.
+    const autoInfo = await request(appPort, 'GET', '/api/agent/session', undefined, autoSession.token);
+    assert.strictEqual(autoInfo.status, 200);
 
     // 12. Revocation: session gone, old token rejected.
     const revoke = await request(appPort, 'POST', '/api/agent/revoke', {}, sessionToken);

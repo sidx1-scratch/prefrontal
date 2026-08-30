@@ -28,6 +28,16 @@
     permRequest: null,   // { requestId, scope, detail }
   };
 
+  // Chat delegation: app.js can subscribe to the agent's streamed events so
+  // it can render `/agent …` commands as an assistant reply. Subscribers are
+  // called with every event the UI SSE stream delivers.
+  const listeners = new Set();
+  function notifyListeners(event) {
+    for (const fn of listeners) {
+      try { fn(event); } catch (e) { /* ignore subscriber errors */ }
+    }
+  }
+
   function $(id) { return document.getElementById(id); }
 
   function cacheEls() {
@@ -263,6 +273,7 @@
   // ── Events from the agent ───────────────────────────────────────
 
   function handleEvent(event) {
+    notifyListeners(event);
     switch (event.type) {
       case 'hello':
         applyHello(event);
@@ -343,6 +354,50 @@
       logLine('err', `Permission response failed: ${err.message}`);
     }
   }
+
+  // Respond to a permission request relayed from a chat-delegated task.
+  async function respondPermission(requestId, granted) {
+    if (!state.session || !requestId) return;
+    try {
+      await api('/api/agent/permission-response', {
+        method: 'POST',
+        body: JSON.stringify({ requestId, granted }),
+      });
+    } catch (err) {
+      throw new Error(`Permission response failed: ${err.message}`);
+    }
+  }
+
+  // Expose a small bridge for the chat UI (app.js) to delegate `/agent …`
+  // commands to the paired agent and stream their events into a chat reply.
+  window.prefrontalAgent = {
+    isPaired: () => Boolean(state.session),
+    isConnected: () => state.streamOpen && state.session !== null,
+    // Open the UI SSE stream if a stored session exists but isn't streaming yet.
+    ensureStream: () => {
+      if (state.session && !state.streamOpen) openStream();
+    },
+    // Send a raw agent command. Throws if there's no session.
+    send: async function (command) {
+      if (!state.session) throw new Error('No agent paired — open the Agent panel and pair first.');
+      const text = String(command).trim();
+      if (!text) throw new Error('Empty command.');
+      reportModelState();
+      ensureStream();
+      await api('/api/agent/command', { method: 'POST', body: JSON.stringify({ command: text }) });
+    },
+    respondPermission,
+    // Answer an ask-user request relayed from a chat-delegated task.
+    respondAsk: async function (requestId, answer) {
+      if (!state.session || !requestId) return;
+      await api('/api/agent/ask-response', {
+        method: 'POST',
+        body: JSON.stringify({ requestId, answer }),
+      });
+    },
+    // Subscribe/unsubscribe to streamed agent events for the current session.
+    onEvent: fn => { listeners.add(fn); return () => listeners.delete(fn); },
+  };
 
   async function disconnectAgent() {
     closeStream();

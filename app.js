@@ -1203,11 +1203,235 @@ async function sendMessage(content) {
   saveChats();
   updateTokenCounter();
 
+  // Slash-command: `/agent <request>` delegates the task to the paired
+  // Prefrontal Agent and streams the agent's progress into this chat.
+  if (/^\/agent\b/.test(content.trim())) {
+    await sendAgentTask(content.trim().replace(/^\/agent\s*/, ''));
+    return;
+  }
+
   if (isImageGenModel(state.settings.model)) {
     await sendImageGenerationRequest(content.trim());
   } else {
     await sendRequest();
   }
+}
+
+/* ─────────────────────────────────────────────────────────────────
+   § 19a  SEND AGENT TASK (`/agent …` → paired Prefrontal Agent)
+   ───────────────────────────────────────────────────────────────── */
+
+// Delegate a chat command to the paired agent's `task` loop and render the
+// agent's streamed progress as an assistant message in this chat. The agent
+// itself interprets "publish" from the prompt (git push, npm publish, etc.).
+async function sendAgentTask(prompt) {
+  const chat = state.chats[state.activeChatId];
+  if (!chat || state.isGenerating) return;
+  const taskText = String(prompt || '').trim();
+  if (!taskText) {
+    toast('Usage: /agent write a blog project and publish it to GitHub', 'warn');
+    return;
+  }
+  const pf = window.prefrontalAgent;
+  if (!pf || !pf.isPaired || !pf.isPaired()) {
+    toast('No agent paired — open the Agent panel and pair a Prefrontal Agent first.', 'error', 5000);
+    return;
+  }
+
+  state.isGenerating    = true;
+  state.abortController = new AbortController();
+  setSendingState(true);
+  setStatus('loading', `Agent: ${state.settings.model || 'task'}`);
+
+  const assistantMsg = { id: uid(), role: 'assistant', content: '', timestamp: Date.now() };
+  chat.messages.push(assistantMsg);
+
+  const msgEl = document.createElement('div');
+  msgEl.className   = 'message assistant';
+  msgEl.dataset.id  = assistantMsg.id;
+  const avatarId    = assistantMsg.id.slice(-4);
+  msgEl.innerHTML   = `
+    <div class="msg-avatar">
+      <svg viewBox="0 0 36 36" fill="none" style="width:20px;height:20px"><circle cx="18" cy="18" r="18" fill="url(#ag${avatarId})"/><path d="M24 14h-5.5a2.5 2.5 0 000 5H21a2.5 2.5 0 010 5h-6" stroke="#fff" stroke-width="1.5" stroke-linecap="round"/><defs><linearGradient id="ag${avatarId}" x1="0" y1="0" x2="36" y2="36"><stop offset="0%" stop-color="#7c3aed"/><stop offset="100%" stop-color="#4f46e5"/></linearGradient></defs></svg>
+    </div>
+    <div class="msg-bubble">
+      <div class="msg-content"><div class="thinking-dots"><span></span><span></span><span></span></div></div>
+      <div class="msg-meta"><span class="msg-time"></span></div>
+    </div>`;
+  els.messagesWrapper.appendChild(msgEl);
+
+  const stopWrapper = document.createElement('div');
+  stopWrapper.className = 'stop-btn-wrapper';
+  stopWrapper.innerHTML = `<button class="stop-btn visible" id="agentTaskStopBtn">Stop</button>`;
+  els.messagesWrapper.appendChild(stopWrapper);
+  $('agentTaskStopBtn')?.addEventListener('click', () => {
+    try { pf && pf.send && pf.send('stop'); } catch (e) {}
+  });
+  scrollToBottom();
+
+  const contentEl = msgEl.querySelector('.msg-content');
+  const metaEl    = msgEl.querySelector('.msg-time');
+  let runningText  = '';
+  let exited       = false;
+
+  // Return a fresh renderer each event by reusing the live-update pattern.
+  const renderLive = () => {
+    const html = runningText
+      ? renderMarkdown(runningText) + '<span class="typing-cursor"></span>'
+      : '<div class="thinking-dots"><span></span><span></span><span></span></div>';
+    contentEl.innerHTML = html;
+    if (state.settings.autoScroll) scrollToBottom();
+  };
+
+  const append = text => { runningText += text; renderLive(); };
+
+  const done = (finalText, err) => {
+    if (exited) return;
+    exited = true;
+    listeners();
+    assistantMsg.content = finalText || runningText;
+    assistantMsg.timestamp = Date.now();
+    contentEl.innerHTML = renderMarkdown(assistantMsg.content);
+    metaEl.textContent = fmtTime(assistantMsg.timestamp);
+    state.isGenerating = false;
+    setSendingState(false);
+    if (err) setStatus('error', `Agent error: ${err.slice(0, 80)}`);
+    else setStatus('online', `Connected · ${state.settings.model}`);
+    chat.updated = Date.now();
+    saveChats();
+    renderChatList();
+    stopWrapper.remove();
+    scrollToBottom();
+  };
+
+  const listeners = pf.onEvent(event => {
+    switch (event.type) {
+      case 'output':
+        append(String(event.text || ''));
+        break;
+      case 'message':
+        append(String(event.text || '') + '\n');
+        break;
+      case 'fs':
+        if (event.ok !== false) append(`✓ ${event.op} ${event.path}${event.to ? ` → ${event.to}` : ''}\n`);
+        break;
+      case 'command-end':
+        if (event.error) done('', event.error);
+        else if (event.canceled) done(`⏹ Task canceled.`);
+        else if (event.timedOut) done('⏱ Task timed out.');
+        else done(''); // keep the streamed text
+        break;
+      case 'permission-request':
+        // Let the user approve/deny inline in the chat, mirroring the panel.
+        // Appended to the message element (not the live-updated contentEl) so
+        // subsequent streamed text re-renders don't wipe it.
+        renderPermissionBanner(msgEl, event, pf, scrollToBottom);
+        break;
+      case 'ask-request':
+        // The planner's `ask_user` tool: render selectable options in the chat.
+        renderAskOptions(msgEl, event, pf, () => {
+          if (state.settings.autoScroll) scrollToBottom();
+        });
+        break;
+      default:
+        break;
+    }
+  });
+
+  try {
+    await pf.send(`task ${taskText}`);
+  } catch (err) {
+    done('', err.message);
+  }
+}
+
+// Inline approve/deny banner for agent permission-request events, appended to
+// the chat message element (so streamed-text re-renders don't wipe it).
+function renderPermissionBanner(msgEl, event, pf, scrollToBottom) {
+  const banner = document.createElement('span');
+  banner.className = 'msg-perm';
+  banner.textContent = `⚠ Agent wants permission: ${event.scope} — ${event.detail}`;
+  const allowBtn = document.createElement('button');
+  allowBtn.className = 'btn-primary';
+  allowBtn.textContent = 'Allow';
+  allowBtn.onclick = () => {
+    pf.respondPermission(event.requestId, true).catch(() => {});
+    banner.remove();
+  };
+  const denyBtn = document.createElement('button');
+  denyBtn.className = 'btn-secondary';
+  denyBtn.textContent = 'Deny';
+  denyBtn.onclick = () => {
+    pf.respondPermission(event.requestId, false).catch(() => {});
+    banner.remove();
+  };
+  banner.appendChild(allowBtn);
+  banner.appendChild(denyBtn);
+  msgEl.appendChild(banner);
+  scrollToBottom && scrollToBottom();
+}
+
+// Render the planner's `ask_user` request as an interactive list of
+// selectable options (mouse click or ↑/↓ + Enter). Returns the chosen option
+// via pf.respondAsk so the paused agent task can resume.
+function renderAskOptions(msgEl, event, pf, scrollToBottom) {
+  const question = String(event.question || 'Please choose an option.');
+  const options = Array.isArray(event.options)
+    ? event.options.map(o => String(o)).filter(t => t && t.trim())
+    : [];
+
+  const box = document.createElement('div');
+  box.className = 'ask-box';
+  box.innerHTML =
+    `<div class="ask-question">${escapeHtml(question)}</div>` +
+    `<div class="ask-options">` +
+    (options.length
+      ? options.map((o, i) =>
+          `<button class="ask-option" data-idx="${i}" tabindex="0"><span class="ask-opt-idx">${i + 1}</span><span class="ask-opt-label">${escapeHtml(o)}</span></button>`
+        ).join('')
+      : `<div class="ask-options"><input class="ask-input" type="text" placeholder="Type your answer…"/></div>`) + `</div>`;
+
+  const submit = answer => {
+    if (answer == null || answer === '') return;
+    pf.respondAsk(event.requestId, answer).catch(() => {});
+    box.setAttribute('data-done', '1');
+    box.classList.add('ask-done');
+    box.innerHTML = `<div class="ask-answer"><b>You answered:</b> ${escapeHtml(String(answer))}</div>`;
+    scrollToBottom && scrollToBottom();
+  };
+
+  if (options.length) {
+    let idx = 0;
+    const opts = box.querySelectorAll('.ask-option');
+    const highlight = () => {
+      opts.forEach((el, i) => el.classList.toggle('selected', i === idx));
+    };
+    const choose = i => {
+      const o = opts[i];
+      if (o) submit((o.querySelector('.ask-opt-label') || o).textContent.trim());
+    };
+    opts.forEach((o, i) => {
+      o.addEventListener('click', () => choose(i));
+      o.addEventListener('focus', () => { idx = i; highlight(); });
+    });
+    box.addEventListener('keydown', e => {
+      if (e.key === 'ArrowDown') { e.preventDefault(); idx = (idx + 1) % opts.length; highlight(); opts[idx].focus(); }
+      else if (e.key === 'ArrowUp') { e.preventDefault(); idx = (idx - 1 + opts.length) % opts.length; highlight(); opts[idx].focus(); }
+      else if (e.key === 'Enter') { e.preventDefault(); choose(idx); }
+      else if ((e.key === '1' || '123456789'.includes(e.key)) && Number(e.key) <= opts.length) { choose(Number(e.key) - 1); }
+    });
+    highlight();
+    opts[0] && opts[0].focus();
+  } else {
+    const input = box.querySelector('.ask-input');
+    const go = () => { const v = input.value.trim(); if (v) submit(v); };
+    input.addEventListener('keydown', e => { if (e.key === 'Enter') go(); });
+    input.addEventListener('blur', () => setTimeout(go, 150));
+    input.focus();
+  }
+
+  msgEl.appendChild(box);
+  scrollToBottom && scrollToBottom();
 }
 
 /* ─────────────────────────────────────────────────────────────────

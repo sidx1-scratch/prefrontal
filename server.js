@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 'use strict';
 
 /* ═══════════════════════════════════════════════════════════════
@@ -16,6 +17,7 @@ const fs    = require('fs');
 const http  = require('http');
 const https = require('https');
 const path  = require('path');
+const os    = require('os');
 const crypto = require('crypto');
 const { URL } = require('url');
 
@@ -51,6 +53,83 @@ function loadEnv(filePath) {
 loadEnv(path.join(ROOT, '.env'));
 
 const PORT = process.env.PORT || 3000;
+
+// ── Shared-secret auto-connect (localhost) ──────────────────────
+// Both Prefrontal (this server) and the Prefrontal Agent read the same
+// random secret from a file so the agent can auto-pair in the background,
+// replacing the manual copy/paste pairing-token flow. The file lives in the
+// agent's shared data dir (same machine, localhost). Override with
+// PREFRONTAL_SHARED_SECRET to pin it, or PREFRONTAL_SHARED_SECRET_FILE to
+// relocate it. Auto-pair only works for loopback clients by default.
+const SHARED_SECRET_FILE = process.env.PREFRONTAL_SHARED_SECRET_FILE ||
+  path.join(os.homedir(), '.prefrontal-agent', 'shared-secret');
+
+function loadOrCreateSharedSecret() {
+  const pinned = process.env.PREFRONTAL_SHARED_SECRET;
+  if (pinned) return pinned;
+  try {
+    const existing = fs.readFileSync(SHARED_SECRET_FILE, 'utf8').trim();
+    if (existing) return existing;
+  } catch (e) {
+    // Missing — generate below.
+  }
+  const secret = crypto.randomBytes(32).toString('hex');
+  try {
+    fs.mkdirSync(path.dirname(SHARED_SECRET_FILE), { recursive: true });
+    fs.writeFileSync(SHARED_SECRET_FILE, secret + '\n', { mode: 0o600 });
+  } catch (e) {
+    // Best-effort: some installs can't write it; auto-pair just won't work.
+  }
+  return secret;
+}
+const SHARED_SECRET = loadOrCreateSharedSecret();
+
+function isLoopback(remoteAddress) {
+  return /^(::1|127\.|::ffff:127\.)/.test(String(remoteAddress || ''));
+}
+
+function safeEqual(a, b) {
+  const ba = Buffer.from(String(a));
+  const bb = Buffer.from(String(b));
+  if (ba.length !== bb.length) return false;
+  return crypto.timingSafeEqual(ba, bb);
+}
+
+// Agent: auto-pair using the shared localhost secret instead of a pairing token.
+async function handleAgentAutoPair(req, res) {
+  if (!isLoopback(req.socket.remoteAddress)) {
+    sendJson(res, 403, { error: 'Auto-pair is only available from localhost. Use the pairing token instead.' });
+    return;
+  }
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch (err) {
+    sendJson(res, err.statusCode || 400, { error: err.message });
+    return;
+  }
+  const { secret, agentName } = body || {};
+  if (!secret || !safeEqual(secret, SHARED_SECRET)) {
+    sendJson(res, 401, { error: 'Invalid or missing shared secret' });
+    return;
+  }
+  // Mirror handleAgentPairConfirm's session creation.
+  const sessionId = genToken();
+  const session = {
+    sessionId,
+    token: genToken(),
+    agentName: String(agentName || 'prefrontal-agent').slice(0, 64),
+    agentInfo: null,
+    connected: false,
+    agentRes: null,
+    uiStreams: new Set(),
+    queue: [],
+    modelState: null,
+    createdAt: Date.now(),
+  };
+  agentSessions.set(sessionId, session);
+  sendJson(res, 200, { sessionId, token: session.token });
+}
 
 const PROVIDERS = {
   openrouter: {
@@ -535,6 +614,30 @@ async function handlePermissionResponse(req, res, session) {
   sendJson(res, 200, { ok: true });
 }
 
+// Browser: answer an agent ask-user prompt (selectable options from the
+// planner's `ask_user` tool). Pushed to the agent stream, which resumes the
+// paused task with the chosen answer.
+async function handleAskResponse(req, res, session) {
+  let body;
+  try {
+    body = await readJsonBody(req);
+  } catch (err) {
+    sendJson(res, err.statusCode || 400, { error: err.message });
+    return;
+  }
+  const { requestId, answer } = body || {};
+  if (!requestId) {
+    sendJson(res, 400, { error: 'Missing requestId' });
+    return;
+  }
+  if (!session.connected || !session.agentRes) {
+    sendJson(res, 409, { error: 'Agent is offline' });
+    return;
+  }
+  sendSSE(session.agentRes, { type: 'ask-response', requestId, answer: answer == null ? null : String(answer) });
+  sendJson(res, 200, { ok: true });
+}
+
 function handleAgentRevoke(req, res, session) {
   closeSession(session.sessionId);
   sendJson(res, 200, { ok: true });
@@ -765,6 +868,10 @@ const server = http.createServer(async (req, res) => {
       handleAgentPairStatus(req, res);
       return;
     }
+    if (pathname === '/api/agent/auto-pair' && req.method === 'POST') {
+      await handleAgentAutoPair(req, res);
+      return;
+    }
     if (pathname === '/api/agent/stream' && req.method === 'GET') {
       const session = requireAgentSession(req, res);
       if (session) handleUIStream(req, res, session);
@@ -788,6 +895,11 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/api/agent/permission-response' && req.method === 'POST') {
       const session = requireAgentSession(req, res);
       if (session) await handlePermissionResponse(req, res, session);
+      return;
+    }
+    if (pathname === '/api/agent/ask-response' && req.method === 'POST') {
+      const session = requireAgentSession(req, res);
+      if (session) await handleAskResponse(req, res, session);
       return;
     }
     if (pathname === '/api/agent/revoke' && req.method === 'POST') {

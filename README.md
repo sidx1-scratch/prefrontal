@@ -226,9 +226,15 @@ Or you can just do
 git clone https://github.com/sidx1-scratch/prefrontal.git
 cd prefrontal
 npm install
+npm link
 npm start
 ```
 If you want to contribute or just want the full Git history.
+
+`npm link` registers a global `prefrontal` command (the server is the bin)
+so you can start it from anywhere with `prefrontal` — useful if you run the
+[Prefrontal Agent](#-prefrontal-agent-coding-agent) in the background, which
+auto-pairs with a server launched this way.
 >[!TIP]
 >To update later, run git pull from inside the prefrontal folder. If the dependencies changed, run npm install afterward just in case.
 
@@ -482,18 +488,31 @@ permission prompts (e.g. `network`) appear inline, and the agent dials
 # 1. Install the agent (separate repo, zero npm deps)
 git clone https://github.com/sidx1-scratch/prefrontal-agent
 cd prefrontal-agent
-node cli/index.js          # REPL — select a workspace, build the sandbox image
+npm link                   # registers the `prefrontal-agent` command globally
+#    (optional) build the sandbox image: prefrontal-agent sandbox build
 
-# 2. Pair from the web UI
-#    Open the Agent panel (robot icon) → Pair new agent → copy the token
-prefrontal> pair <token>
+# 2. Run it — it auto-connects to this server in the background
+prefrontal-agent           
+#    Auto-pair happens automatically because this server writes a local
+#    shared secret to ~/.prefrontal-agent/shared-secret when it starts.
+#    Original manual flow still works:
+#      Open the Agent panel → Pair new agent → copy the token,
+#      then:  prefrontal> pair <token>
 
 # 3. Drive it from the panel, e.g.
 #    run npm test | write src/app.js⏎content | list src
+#    ...or from the chatbox:  /agent create a blog project and publish it
 ```
 
 The integration adds **no dependencies** to this project — the relay in
 `server.js` uses only Node built-ins and `agent.js` is plain vanilla JS.
+
+On the same machine the agent **auto-pairs in the background**: this server
+writes a random shared secret into `~/.prefrontal-agent/shared-secret` at
+startup (mode 0600), the agent reads it and dials the backend automatically.
+Auto-pair is localhost-only and can be disabled with
+`PREFRONTAL_NO_AUTO_PAIR=1`.
+
 See [docs/agent-integration.md](docs/agent-integration.md) for the full
 guide, security model, and relay protocol.
 

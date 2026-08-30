@@ -704,6 +704,46 @@ body { display: flex; position: relative; background: transparent; z-index: 0; f
 .stop-btn:hover { background: var(--surface-hover); color: var(--text-primary); }
 .stop-btn svg { width: 13px; height: 13px; }
 
+/* Permission prompt rendered inline inside a chat `/agent` reply */
+.msg-perm {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  margin-top: 8px; padding: 8px 10px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); font-size: 13px; color: var(--text-secondary);
+}
+.msg-perm .btn-primary, .msg-perm .btn-secondary { padding: 4px 12px; font-size: 12px; }
+
+/* Interactive multiple-choice block rendered for the planner's ask_user tool */
+.ask-box {
+  margin-top: 10px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--surface); display: flex; flex-direction: column; gap: 8px;
+}
+.ask-question { font-size: 13.5px; font-weight: 600; color: var(--text-primary); }
+.ask-options { display: flex; flex-direction: column; gap: 6px; }
+.ask-option {
+  display: flex; align-items: center; gap: 8px; text-align: left;
+  padding: 7px 10px; border-radius: var(--radius);
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text-secondary); font-size: 13px; cursor: pointer;
+  transition: border-color var(--transition), background var(--transition), color var(--transition);
+}
+.ask-option:hover { border-color: var(--accent); color: var(--text-primary); }
+.ask-option.selected { border-color: var(--accent); background: rgba(16,163,127,0.12); color: var(--accent); }
+.ask-opt-idx {
+  flex-shrink: 0; width: 20px; height: 20px; display: inline-flex; align-items: center;
+  justify-content: center; font-size: 11px; font-weight: 700;
+  border-radius: 50%; background: var(--surface-hover); color: var(--text-secondary);
+}
+.ask-option.selected .ask-opt-idx { background: var(--accent); color: #fff; }
+.ask-input {
+  width: 100%; padding: 8px 10px; border-radius: var(--radius);
+  border: 1px solid var(--border); background: var(--surface-hover);
+  color: var(--text-primary); font-size: 13px; font-family: var(--font);
+}
+.ask-answer { font-size: 13px; color: var(--text-primary); }
+.ask-done { opacity: 0.95; }
+
 /* ── STATUS BAR ── */
 .status-bar {
   padding: 3px 18px;

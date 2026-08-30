@@ -71,16 +71,38 @@ Browser (agent.js panel)          Local Agent (prefrontal-agent)
 | `POST /model-state` | browser | report the UI's current runtime/model for the session |
 | `GET /model-state` | agent | read the model the UI selected for this session |
 | `POST /llm` | agent | proxy a chat-completion to OpenRouter (key stays server-side) |
+| `POST /auto-pair` | agent | auto-pair with a shared localhost secret (no token) |
+| `POST /ask-response` | browser | answer the planner's `ask_user` multiple-choice question |
 
 All endpoints except `pair`/`pair/status` require
 `Authorization: Bearer <session-token>`. Events are JSON `data:` frames
 over Server-Sent Events; the protocol is documented in the
 [agent repo's PROTOCOL.md](https://github.com/sidx1-scratch/prefrontal-agent/blob/main/docs/PROTOCOL.md).
 
+## Auto-connect (no pairing token)
+
+On the same machine, pairing is automatic: this server writes a random
+secret to `~/.prefrontal-agent/shared-secret` (mode 0600) at startup, and
+the agent reads it and calls `POST /api/agent/auto-pair` in the background
+when it starts. Auto-pair is **localhost-only** (remote clients are denied
+and must use the manual token), and the agent skips it with
+`PREFRONTAL_NO_AUTO_PAIR=1`. The manual `pair <token>` flow still works as
+an alternative and for remote setups.
+
+## Interactive questions (`ask_user`)
+
+The agent's `task` loop can pause and ask you a question with selectable
+options. The agent emits an `ask-request` event (`{ requestId, question,
+options }`); the web panel or chat renders it as a list you can click or
+navigate with ↑/↓ + Enter, and the choice is returned via
+`POST /api/agent/ask-response` so the model resumes. In the chatbox this is
+fully inline — the options appear right in the reply and your pick feeds
+back automatically.
+
 ## Security notes
 
 - Pairing tokens are single-use, expire after 5 minutes, and are never
-  logged.
+  logged. Auto-pair uses a shared localhost-only secret file (mode 0600).
 - Commands execute inside a disposable Podman container; the host shell
   is never used for agent commands.
 - Filesystem operations are confined to the agent's approved workspace
@@ -109,6 +131,27 @@ backend (`POST /api/agent/llm`) so the OpenRouter key stays in `.env` and
 never reaches the agent. OpenRouter is the only supported runtime for this
 path so far; Ollama support is planned later. Use `llm set-mode local` on
 the agent to fall back to a local URL/key/model instead.
+
+## Chat delegation (`/agent …`)
+
+You can drive the paired agent straight from the **chatbox**. Type
+`/agent <your request>` in the main chat input and hit send — instead of a
+normal model reply, the chat hands the request to the agent's `task` loop
+as if you had run `task <your request>` in its panel:
+
+```
+/agent create a static blog project in /tmp/blog and publish it to GitHub
+```
+
+The agent plans, creates files, and runs commands (git init/commit/push,
+npm publish, … depending on what your prompt asks), and the progress
+streams back into the chat as an assistant message. Permission prompts
+(e.g. `network` for a push) appear inline in the reply with **Allow / Deny**
+buttons, mirroring the Agent panel. Use **Stop** to cancel.
+
+Requires a paired agent (open the **Agent** panel and pair first). The
+agent interprets "publish" from your prompt — the UI doesn't assume what
+it means.
 
 ## What's intentionally NOT included
 

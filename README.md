@@ -470,6 +470,9 @@ Turning the toggle on quietly appends a short instruction to the system prompt, 
 | 🎨 Refined UI | 4 themes: Dark, Midnight, Emerald, Light |
 | 🧑 Local Profile | Device identity stored locally — no accounts |
 | 📤 Export | Export chats as Markdown, profile as JSON |
+| 🤖 Agent Chat (`/agent`) | drive the paired Prefrontal Agent from the chatbox; progress + permissions stream inline |
+| ✅ Interactive Questions | the agent's `ask_user` tool renders selectable options in chat (mouse or ↑/↓ + Enter) |
+| 🔗 Auto-connect | agent auto-pairs in the background via a localhost shared secret — no pairing token |
 | 🔒 100% Private | Zero network calls except to your own model server |
 
 ---

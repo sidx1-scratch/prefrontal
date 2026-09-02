@@ -368,15 +368,17 @@
     }
   }
 
+  // Open the UI SSE stream if a stored session exists but isn't streaming yet.
+  function ensureStream() {
+    if (state.session && !state.streamOpen) openStream();
+  }
+
   // Expose a small bridge for the chat UI (app.js) to delegate `/agent …`
   // commands to the paired agent and stream their events into a chat reply.
   window.prefrontalAgent = {
     isPaired: () => Boolean(state.session),
     isConnected: () => state.streamOpen && state.session !== null,
-    // Open the UI SSE stream if a stored session exists but isn't streaming yet.
-    ensureStream: () => {
-      if (state.session && !state.streamOpen) openStream();
-    },
+    ensureStream,
     // Send a raw agent command. Throws if there's no session.
     send: async function (command) {
       if (!state.session) throw new Error('No agent paired — open the Agent panel and pair first.');

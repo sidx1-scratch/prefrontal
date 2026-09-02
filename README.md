@@ -488,11 +488,11 @@ permission prompts (e.g. `network`) appear inline, and the agent dials
 # 1. Install the agent (separate repo, zero npm deps)
 git clone https://github.com/sidx1-scratch/prefrontal-agent
 cd prefrontal-agent
-npm link                   # registers the `prefrontal-agent` command globally
-#    (optional) build the sandbox image: prefrontal-agent sandbox build
+./setup.sh                 # runs npm link and pre-pulls the sandbox container image
 
 # 2. Run it — it auto-connects to this server in the background
-prefrontal-agent           
+prefrontal-agent background # runs the agent continuously in the background
+#    or run interactively: prefrontal-agent
 #    Auto-pair happens automatically because this server writes a local
 #    shared secret to ~/.prefrontal-agent/shared-secret when it starts.
 #    Original manual flow still works:

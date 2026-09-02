@@ -37,14 +37,17 @@ Browser (agent.js panel)          Local Agent (prefrontal-agent)
    ```bash
    git clone https://github.com/sidx1-scratch/prefrontal-agent
    cd prefrontal-agent
-   node cli/index.js          # or: npm start / prefrontal-agent
+   ./setup.sh                 # links command globally and pre-pulls sandbox image
    ```
-3. **Select a workspace** in the agent REPL:
+3. **Run the agent**:
+   ```bash
+   prefrontal-agent background # runs continuously in the background
+   # or run the interactive REPL: prefrontal-agent
    ```
-   prefrontal> workspace /home/you/projects/my-app
+4. **Select a workspace** (optional or in REPL):
    ```
-4. **Build the sandbox image** (once): `prefrontal-agent sandbox build`
-   (requires Podman: https://podman.io/docs/installation).
+   prefrontal-agent workspace /home/you/projects/my-app
+   ```
 5. **Pair**: in the web UI, open the **Agent** panel (robot icon in the
    top bar) → **Pair new agent** → copy the token → in the agent REPL:
    ```

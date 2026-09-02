@@ -48,11 +48,8 @@ Browser (agent.js panel)          Local Agent (prefrontal-agent)
    ```
    prefrontal-agent workspace /home/you/projects/my-app
    ```
-5. **Pair**: in the web UI, open the **Agent** panel (robot icon in the
-   top bar) → **Pair new agent** → copy the token → in the agent REPL:
-   ```
-   prefrontal> pair <token>
-   ```
+5. **Connect**: start the agent and open the **Agent** panel (robot icon in
+   the top bar). The panel discovers the local auto-connected session.
 6. **Send commands** from the panel, e.g. `run npm test`,
    `write src/app.js`⏎`content`, `list src`. Output streams live.
    Permission prompts (e.g. `network`) appear in the panel — Allow/Deny.
@@ -61,9 +58,7 @@ Browser (agent.js panel)          Local Agent (prefrontal-agent)
 
 | Endpoint | Who | Purpose |
 |---|---|---|
-| `POST /pair` | browser | create a single-use pairing token (5 min TTL) |
-| `POST /pair/confirm` | agent | exchange token for `{ sessionId, token }` |
-| `GET /pair/status?token=` | browser | pairing poll: waiting / paired / expired |
+| `GET /discover` | browser (localhost) | discover the auto-connected session |
 | `GET /agent-stream?session=` | agent | outbound authenticated SSE (receives commands) |
 | `GET /stream?session=` | browser | UI SSE (receives streamed events) |
 | `POST /command` | browser | send a tool command (queued while agent offline) |
@@ -82,15 +77,13 @@ All endpoints except `pair`/`pair/status` require
 over Server-Sent Events; the protocol is documented in the
 [agent repo's PROTOCOL.md](https://github.com/sidx1-scratch/prefrontal-agent/blob/main/docs/PROTOCOL.md).
 
-## Auto-connect (no pairing token)
+## Auto-connect
 
-On the same machine, pairing is automatic: this server writes a random
-secret to `~/.prefrontal-agent/shared-secret` (mode 0600) at startup, and
+On the same machine, auto-connect is automatic: this server writes a random
+secret to `/tmp/prefrontal-agent/shared-secret` (mode 0600) at startup, and
 the agent reads it and calls `POST /api/agent/auto-pair` in the background
-when it starts. Auto-pair is **localhost-only** (remote clients are denied
-and must use the manual token), and the agent skips it with
-`PREFRONTAL_NO_AUTO_PAIR=1`. The manual `pair <token>` flow still works as
-an alternative and for remote setups.
+when it starts. Auto-connect is **localhost-only** (remote clients are denied)
+and the agent skips it with `PREFRONTAL_NO_AUTO_CONNECT=1`.
 
 ## Interactive questions (`ask_user`)
 
@@ -104,8 +97,8 @@ back automatically.
 
 ## Security notes
 
-- Pairing tokens are single-use, expire after 5 minutes, and are never
-  logged. Auto-pair uses a shared localhost-only secret file (mode 0600).
+- Auto-connect uses a shared localhost-only secret file (mode 0600); secrets
+  and session tokens are never logged.
 - Commands execute inside a disposable Podman container; the host shell
   is never used for agent commands.
 - Filesystem operations are confined to the agent's approved workspace

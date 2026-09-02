@@ -3,7 +3,7 @@
    Copyright (C) 2026 sidx1-scratch
 
    Vanilla JS, zero dependencies — matching the project's no-build,
-   no-framework rule. Renders a panel for pairing with a local
+   no-framework rule. Renders a panel for connecting to a local
    Prefrontal Agent, sending it tool commands, streaming its output
    live, and answering permission prompts.
 
@@ -21,8 +21,6 @@
 
   const state = {
     session: null,       // { sessionId, token, agentName }
-    pairingToken: null,
-    pairingPoll: null,
     streamAbort: null,   // AbortController for the UI SSE stream
     streamOpen: false,
     permRequest: null,   // { requestId, scope, detail }
@@ -42,7 +40,7 @@
 
   function cacheEls() {
     ['agentBtn', 'agentOverlay', 'agentClose', 'agentStatusPill', 'agentNameEl', 'agentWorkspaceEl',
-      'pairingBox', 'pairBtn', 'pairActive', 'pairTokenValue', 'copyTokenBtn', 'pairCancelBtn',
+      'pairingBox',
       'commandBox', 'agentCommand', 'agentSendBtn', 'agentStopBtn', 'agentLog',
       'permBanner', 'permText', 'permAllowBtn', 'permDenyBtn', 'agentDisconnectBtn',
     ].forEach(id => { els[id] = $(id); });
@@ -114,7 +112,7 @@
     els.agentNameEl.textContent = (state.session && state.session.agentName) || '—';
   }
 
-  function showPairingUI() {
+  function showConnectUI() {
     els.pairingBox.style.display = '';
     els.commandBox.style.display = 'none';
     els.agentDisconnectBtn.style.display = 'none';
@@ -146,71 +144,21 @@
     return data;
   }
 
-  // ── Pairing ─────────────────────────────────────────────────────
+  // ── Local auto-connect discovery ───────────────────────────────
 
-  async function startPairing() {
-    if (state.pairingPoll) return;
+  async function discoverAgent() {
     try {
-      const { token, expiresIn } = await api('/api/agent/pair', { method: 'POST', body: '{}' });
-      state.pairingToken = token;
-      els.pairIdle = $('pairIdle');
-      els.pairIdle.style.display = 'none';
-      els.pairActive.style.display = '';
-      els.pairTokenValue.textContent = token;
-      logLine('msg', `Pairing token created — expires in ${Math.round(expiresIn / 60)} minutes.`);
-      state.pairingPoll = setInterval(pollPairing, 1500);
-    } catch (err) {
-      logLine('err', `Pairing failed: ${err.message}`);
-    }
-  }
-
-  async function pollPairing() {
-    if (!state.pairingToken) return;
-    try {
-      const data = await api(`/api/agent/pair/status?token=${encodeURIComponent(state.pairingToken)}`, { method: 'GET' });
-      if (data.status === 'waiting') return;
-      clearInterval(state.pairingPoll);
-      state.pairingPoll = null;
-      if (data.status === 'expired') {
-        logLine('err', 'Pairing token expired. Start again.');
-        resetPairingUI();
-        return;
-      }
-      // Paired.
-      state.session = { sessionId: data.sessionId, token: data.token, agentName: null };
+      const session = await api('/api/agent/discover', { method: 'GET' });
+      state.session = session;
       saveSession();
-      state.pairingToken = null;
-      resetPairingUI();
       showPairedUI();
-      logLine('ok', 'Paired with the agent. Sending `status`…');
+      logLine('ok', 'Auto-connected to the local Prefrontal Agent.');
       openStream();
       reportModelState();
       await sendCommand('status');
     } catch (err) {
-      // Server may have restarted — keep polling briefly.
-      if (err.message.includes('404')) {
-        clearInterval(state.pairingPoll);
-        state.pairingPoll = null;
-        logLine('err', 'Pairing token no longer valid. Start again.');
-        resetPairingUI();
-      }
+      if (!err.message.includes('404')) logLine('err', `Auto-connect failed: ${err.message}`);
     }
-  }
-
-  function resetPairingUI() {
-    els.pairIdle = $('pairIdle');
-    els.pairIdle.style.display = '';
-    els.pairActive.style.display = 'none';
-    els.pairTokenValue.textContent = '';
-  }
-
-  function cancelPairing() {
-    if (state.pairingPoll) {
-      clearInterval(state.pairingPoll);
-      state.pairingPoll = null;
-    }
-    state.pairingToken = null;
-    resetPairingUI();
   }
 
   // ── UI SSE stream ───────────────────────────────────────────────
@@ -317,7 +265,7 @@
       case 'revoke':
         clearSession();
         closeStream();
-        showPairingUI();
+        showConnectUI();
         setStatus(false, 'Offline');
         logLine('err', 'Session revoked.');
         break;
@@ -374,14 +322,14 @@
   }
 
   // Expose a small bridge for the chat UI (app.js) to delegate `/agent …`
-  // commands to the paired agent and stream their events into a chat reply.
+  // commands to the connected agent and stream their events into a chat reply.
   window.prefrontalAgent = {
     isPaired: () => Boolean(state.session),
     isConnected: () => state.streamOpen && state.session !== null,
     ensureStream,
     // Send a raw agent command. Throws if there's no session.
     send: async function (command) {
-      if (!state.session) throw new Error('No agent paired — open the Agent panel and pair first.');
+      if (!state.session) throw new Error('No local agent connected — start prefrontal-agent and reopen the Agent panel.');
       const text = String(command).trim();
       if (!text) throw new Error('Empty command.');
       reportModelState();
@@ -411,7 +359,7 @@
       }
     }
     clearSession();
-    showPairingUI();
+    showConnectUI();
     setStatus(false, 'Offline');
     els.agentNameEl.textContent = '—';
     els.agentWorkspaceEl.textContent = '';
@@ -435,13 +383,14 @@
         reportModelState();
       } catch {
         clearSession();
-        showPairingUI();
+        showConnectUI();
         setStatus(false, 'Offline');
-        logLine('warn', 'Stored session is no longer valid — pair again.');
+        logLine('warn', 'Stored session is no longer valid — waiting for auto-connect.');
       }
     }
     if (!state.session) {
       setStatus(false, 'Offline');
+      discoverAgent();
     }
   }
 
@@ -460,11 +409,6 @@
     document.addEventListener('keydown', event => {
       if (event.key === 'Escape' && els.agentOverlay.classList.contains('open')) closePanel();
     });
-    els.pairBtn.addEventListener('click', startPairing);
-    els.copyTokenBtn.addEventListener('click', () => {
-      navigator.clipboard.writeText(els.pairTokenValue.textContent).catch(() => {});
-    });
-    els.pairCancelBtn.addEventListener('click', cancelPairing);
     els.agentSendBtn.addEventListener('click', () => {
       const value = els.agentCommand.value;
       if (!value.trim()) return;
@@ -487,7 +431,7 @@
     cacheEls();
     bindEvents();
     loadSession();
-    logLine('muted', 'Agent panel ready. Click “Pair new agent” to connect a local Prefrontal Agent.');
+    logLine('muted', 'Agent panel ready. The local Prefrontal Agent connects automatically.');
   }
 
   if (document.readyState === 'loading') {

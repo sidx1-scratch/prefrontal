@@ -621,24 +621,11 @@
           <span class="agent-workspace" id="agentWorkspaceEl"></span>
         </div>
 
-        <!-- Pairing -->
+        <!-- Local auto-connect -->
         <div class="setting-group" id="pairingBox">
-          <div id="pairIdle">
-            <p class="setting-hint">Pair this web client with a local Prefrontal Agent. The agent dials
+          <p class="setting-hint">The local Prefrontal Agent connects automatically. It dials
               <strong>out</strong> to this server — no ports to forward, no firewall changes. Commands run in the
               agent's Podman sandbox, scoped to its workspace.</p>
-            <button class="btn-primary" id="pairBtn">Pair new agent</button>
-          </div>
-          <div id="pairActive" style="display:none">
-            <label class="setting-label">Pairing token <span class="setting-hint">(valid 5 min · single use)</span></label>
-            <div class="agent-token-box">
-              <code id="pairTokenValue"></code>
-              <button class="btn-secondary" id="copyTokenBtn">Copy</button>
-            </div>
-            <p class="setting-hint">In the agent terminal run <code>prefrontal-agent pair &lt;token&gt;</code>
-              (or <code>pair &lt;token&gt;</code> inside its REPL). Waiting for the agent…</p>
-            <button class="btn-secondary" id="pairCancelBtn">Cancel</button>
-          </div>
         </div>
 
         <!-- Commands -->

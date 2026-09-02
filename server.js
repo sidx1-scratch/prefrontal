@@ -56,13 +56,13 @@ const PORT = process.env.PORT || 3000;
 
 // ── Shared-secret auto-connect (localhost) ──────────────────────
 // Both Prefrontal (this server) and the Prefrontal Agent read the same
-// random secret from a file so the agent can auto-pair in the background,
-// replacing the manual copy/paste pairing-token flow. The file lives in the
+// random secret from a file so the agent can auto-connect in the background,
+// replacing the manual copy/paste flow. The file lives in the
 // agent's shared data dir (same machine, localhost). Override with
 // PREFRONTAL_SHARED_SECRET to pin it, or PREFRONTAL_SHARED_SECRET_FILE to
 // relocate it. Auto-pair only works for loopback clients by default.
 const SHARED_SECRET_FILE = process.env.PREFRONTAL_SHARED_SECRET_FILE ||
-  path.join(os.homedir(), '.prefrontal-agent', 'shared-secret');
+  path.join(os.tmpdir(), 'prefrontal-agent', 'shared-secret');
 
 function loadOrCreateSharedSecret() {
   const pinned = process.env.PREFRONTAL_SHARED_SECRET;
@@ -75,7 +75,8 @@ function loadOrCreateSharedSecret() {
   }
   const secret = crypto.randomBytes(32).toString('hex');
   try {
-    fs.mkdirSync(path.dirname(SHARED_SECRET_FILE), { recursive: true });
+    fs.mkdirSync(path.dirname(SHARED_SECRET_FILE), { recursive: true, mode: 0o700 });
+    try { fs.chmodSync(path.dirname(SHARED_SECRET_FILE), 0o700); } catch {}
     fs.writeFileSync(SHARED_SECRET_FILE, secret + '\n', { mode: 0o600 });
   } catch (e) {
     // Best-effort: some installs can't write it; auto-pair just won't work.
@@ -95,10 +96,10 @@ function safeEqual(a, b) {
   return crypto.timingSafeEqual(ba, bb);
 }
 
-// Agent: auto-pair using the shared localhost secret instead of a pairing token.
+// Agent: auto-connect using the shared localhost secret.
 async function handleAgentAutoPair(req, res) {
   if (!isLoopback(req.socket.remoteAddress)) {
-    sendJson(res, 403, { error: 'Auto-pair is only available from localhost. Use the pairing token instead.' });
+    sendJson(res, 403, { error: 'Auto-connect is only available from localhost.' });
     return;
   }
   let body;
@@ -113,7 +114,8 @@ async function handleAgentAutoPair(req, res) {
     sendJson(res, 401, { error: 'Invalid or missing shared secret' });
     return;
   }
-  // Mirror handleAgentPairConfirm's session creation.
+  // Create a session for the local agent. The browser discovers this session
+  // through /api/agent/discover; no token needs to be copied by the user.
   const sessionId = genToken();
   const session = {
     sessionId,
@@ -126,6 +128,7 @@ async function handleAgentAutoPair(req, res) {
     queue: [],
     modelState: null,
     createdAt: Date.now(),
+    autoConnected: true,
   };
   agentSessions.set(sessionId, session);
   sendJson(res, 200, { sessionId, token: session.token });
@@ -359,21 +362,12 @@ function buildProxyResponseHeaders(proxyRes) {
 // Session state lives in memory: restarting the server clears it and
 // the agent re-pairs.
 
-const PAIR_TOKEN_TTL_MS = 5 * 60 * 1000;
 const AGENT_HEARTBEAT_MS = 15 * 1000;
 const MAX_QUEUED_COMMANDS = 20;
-const pendingPairTokens = new Map(); // pairingToken -> { createdAt, sessionId }
 const agentSessions = new Map();     // sessionId -> session
 
 function genToken() {
   return crypto.randomBytes(24).toString('hex');
-}
-
-function sweepPairingTokens() {
-  const now = Date.now();
-  for (const [token, pending] of pendingPairTokens) {
-    if (now - pending.createdAt > PAIR_TOKEN_TTL_MS) pendingPairTokens.delete(token);
-  }
 }
 
 function readBearer(req) {
@@ -429,85 +423,22 @@ function closeSession(sessionId) {
   return true;
 }
 
-// Browser: create a short-lived, single-use pairing token.
-function handleAgentPair(req, res) {
-  sweepPairingTokens();
-  if (pendingPairTokens.size >= 10) {
-    sendJson(res, 429, { error: 'Too many pending pairing tokens. Wait a moment.' });
+// Browser: discover the local agent session created by auto-connect.
+function handleAgentDiscover(req, res) {
+  if (!isLoopback(req.socket.remoteAddress)) {
+    sendJson(res, 403, { error: 'Auto-connect discovery is only available from localhost' });
     return;
   }
-  const token = genToken();
-  pendingPairTokens.set(token, { createdAt: Date.now(), sessionId: null });
-  sendJson(res, 200, { token, expiresIn: PAIR_TOKEN_TTL_MS / 1000 }, { 'Cache-Control': 'no-store' });
-}
-
-// Agent: exchange a pairing token for a persistent session.
-async function handleAgentPairConfirm(req, res) {
-  let body;
-  try {
-    body = await readJsonBody(req);
-  } catch (err) {
-    sendJson(res, err.statusCode || 400, { error: err.message });
-    return;
-  }
-  const { token, agentName } = body || {};
-  const pending = token && pendingPairTokens.get(token);
-  if (!pending || Date.now() - pending.createdAt > PAIR_TOKEN_TTL_MS) {
-    if (pending) pendingPairTokens.delete(token);
-    sendJson(res, 401, { error: 'Invalid or expired pairing token' });
-    return;
-  }
-  if (pending.sessionId) {
-    // Single-use: this pairing token was already exchanged for a session.
-    // The entry is kept so the browser's pairing status poll can report
-    // 'paired' — but it can never be exchanged again.
-    sendJson(res, 401, { error: 'Pairing token already used' });
-    return;
-  }
-  const sessionId = genToken();
-  const session = {
-    sessionId,
-    token: genToken(),
-    agentName: String(agentName || 'prefrontal-agent').slice(0, 64),
-    agentInfo: null,
-    connected: false,
-    agentRes: null,
-    uiStreams: new Set(),
-    queue: [],
-    // Model selection + runtime reported by the web UI for this session.
-    // The agent reads this so `task` uses exactly the model picked in the UI.
-    modelState: null, // { runtime, model, serverUrl }
-    createdAt: Date.now(),
-  };
-  agentSessions.set(sessionId, session);
-  pending.sessionId = sessionId;
-  sendJson(res, 200, { sessionId, token: session.token });
-}
-
-// Browser (polled while pairing): waiting / paired / expired.
-function handleAgentPairStatus(req, res) {
-  const token = new URL(req.url, 'http://localhost').searchParams.get('token');
-  const pending = token && pendingPairTokens.get(token);
-  if (!pending) {
-    sendJson(res, 404, { error: 'Unknown pairing token' });
-    return;
-  }
-  if (Date.now() - pending.createdAt > PAIR_TOKEN_TTL_MS) {
-    pendingPairTokens.delete(token);
-    sendJson(res, 200, { status: 'expired' });
-    return;
-  }
-  if (!pending.sessionId) {
-    sendJson(res, 200, { status: 'waiting' });
-    return;
-  }
-  const session = agentSessions.get(pending.sessionId);
+  const session = [...agentSessions.values()].find(candidate => candidate.autoConnected);
   if (!session) {
-    pendingPairTokens.delete(token);
-    sendJson(res, 404, { error: 'Session no longer exists' });
+    sendJson(res, 404, { error: 'No auto-connected agent found' });
     return;
   }
-  sendJson(res, 200, { status: 'paired', sessionId: pending.sessionId, token: session.token });
+  sendJson(res, 200, {
+    sessionId: session.sessionId,
+    token: session.token,
+    agentName: session.agentName,
+  }, { 'Cache-Control': 'no-store' });
 }
 
 // Agent's outbound SSE stream. Holds the connection, flushes queued
@@ -856,20 +787,12 @@ const server = http.createServer(async (req, res) => {
     }
 
     // ── Prefrontal Agent relay ──
-    if (pathname === '/api/agent/pair' && req.method === 'POST') {
-      handleAgentPair(req, res);
-      return;
-    }
-    if (pathname === '/api/agent/pair/confirm' && req.method === 'POST') {
-      await handleAgentPairConfirm(req, res);
-      return;
-    }
-    if (pathname === '/api/agent/pair/status' && req.method === 'GET') {
-      handleAgentPairStatus(req, res);
-      return;
-    }
     if (pathname === '/api/agent/auto-pair' && req.method === 'POST') {
       await handleAgentAutoPair(req, res);
+      return;
+    }
+    if (pathname === '/api/agent/discover' && req.method === 'GET') {
+      handleAgentDiscover(req, res);
       return;
     }
     if (pathname === '/api/agent/stream' && req.method === 'GET') {

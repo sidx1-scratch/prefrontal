@@ -493,11 +493,9 @@ cd prefrontal-agent
 # 2. Run it — it auto-connects to this server in the background
 prefrontal-agent background # runs the agent continuously in the background
 #    or run interactively: prefrontal-agent
-#    Auto-pair happens automatically because this server writes a local
-#    shared secret to ~/.prefrontal-agent/shared-secret when it starts.
-#    Original manual flow still works:
-#      Open the Agent panel → Pair new agent → copy the token,
-#      then:  prefrontal> pair <token>
+#    Auto-connect happens automatically because this server writes a local
+#    shared secret to /tmp/prefrontal-agent/shared-secret when it starts.
+#    Open the Agent panel to discover the connected agent.
 
 # 3. Drive it from the panel, e.g.
 #    run npm test | write src/app.js⏎content | list src
@@ -507,11 +505,11 @@ prefrontal-agent background # runs the agent continuously in the background
 The integration adds **no dependencies** to this project — the relay in
 `server.js` uses only Node built-ins and `agent.js` is plain vanilla JS.
 
-On the same machine the agent **auto-pairs in the background**: this server
-writes a random shared secret into `~/.prefrontal-agent/shared-secret` at
+On the same machine the agent **auto-connects in the background**: this server
+writes a random shared secret into `/tmp/prefrontal-agent/shared-secret` at
 startup (mode 0600), the agent reads it and dials the backend automatically.
-Auto-pair is localhost-only and can be disabled with
-`PREFRONTAL_NO_AUTO_PAIR=1`.
+Auto-connect is localhost-only and can be disabled with
+`PREFRONTAL_NO_AUTO_CONNECT=1`.
 
 See [docs/agent-integration.md](docs/agent-integration.md) for the full
 guide, security model, and relay protocol.

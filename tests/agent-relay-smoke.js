@@ -111,7 +111,7 @@ async function main() {
     env: {
       ...process.env,
       PORT: String(appPort),
-      // Keep the shared-secret flow isolated from any real ~/.prefrontal-agent
+      // Keep the shared-secret flow isolated from any real agent state.
       PREFRONTAL_SHARED_SECRET: 'ci-shared-secret',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -134,37 +134,17 @@ async function main() {
       }
     }, 'server ready');
 
-    // 1. Browser creates a pairing token.
-    const pair = await request(appPort, 'POST', '/api/agent/pair', {});
-    assert.strictEqual(pair.status, 200);
-    const pairingToken = JSON.parse(pair.body).token;
-    assert.ok(pairingToken && pairingToken.length >= 32, 'pairing token looks random');
-
-    // 2. Status is 'waiting' before the agent confirms.
-    const waiting = await request(appPort, 'GET', `/api/agent/pair/status?token=${pairingToken}`);
-    assert.strictEqual(JSON.parse(waiting.body).status, 'waiting');
-
-    // 3. Agent exchanges the token for a session.
-    const confirm = await request(appPort, 'POST', '/api/agent/pair/confirm', {
-      token: pairingToken,
-      agentName: 'ci-agent',
+    // The agent auto-connects with the local shared secret; the browser
+    // discovers that session without manual credentials.
+    const autoGood = await request(appPort, 'POST', '/api/agent/auto-pair', {
+      secret: 'ci-shared-secret', agentName: 'ci-agent',
     });
-    assert.strictEqual(confirm.status, 200);
-    const { sessionId, token: sessionToken } = JSON.parse(confirm.body);
+    assert.strictEqual(autoGood.status, 200);
+    const { sessionId, token: sessionToken } = JSON.parse(autoGood.body);
     assert.ok(sessionId && sessionToken);
-
-    // 4. Using the same token again fails (single-use).
-    const reuse = await request(appPort, 'POST', '/api/agent/pair/confirm', {
-      token: pairingToken,
-      agentName: 'ci-agent',
-    });
-    assert.strictEqual(reuse.status, 401);
-
-    // 5. Browser poll now reports 'paired' with the session token.
-    const paired = await request(appPort, 'GET', `/api/agent/pair/status?token=${pairingToken}`);
-    const pairedBody = JSON.parse(paired.body);
-    assert.strictEqual(pairedBody.status, 'paired');
-    assert.strictEqual(pairedBody.sessionId, sessionId);
+    const discovered = await request(appPort, 'GET', '/api/agent/discover');
+    assert.strictEqual(discovered.status, 200);
+    assert.strictEqual(JSON.parse(discovered.body).sessionId, sessionId);
 
     // 6. Agent connects its outbound stream.
     agentStream = await openSSE(appPort, `/api/agent/agent-stream?session=${sessionId}`, sessionToken);
@@ -258,20 +238,11 @@ async function main() {
     assert.strictEqual(askEvent.requestId, 'ask-1');
     assert.strictEqual(askEvent.answer, 'python');
 
-    // 11d-2. Auto-pair: wrong secret rejected, correct secret (localhost) works.
+    // 11d-2. Invalid auto-connect secrets are rejected.
     const autoWrong = await request(appPort, 'POST', '/api/agent/auto-pair', {
       secret: 'nope', agentName: 'ci-agent',
     });
     assert.strictEqual(autoWrong.status, 401);
-    const autoGood = await request(appPort, 'POST', '/api/agent/auto-pair', {
-      secret: 'ci-shared-secret', agentName: 'ci-agent',
-    });
-    assert.strictEqual(autoGood.status, 200);
-    const autoSession = JSON.parse(autoGood.body);
-    assert.ok(autoSession.sessionId && autoSession.token);
-    // A fresh auto-paired token can authenticate.
-    const autoInfo = await request(appPort, 'GET', '/api/agent/session', undefined, autoSession.token);
-    assert.strictEqual(autoInfo.status, 200);
 
     // 12. Revocation: session gone, old token rejected.
     const revoke = await request(appPort, 'POST', '/api/agent/revoke', {}, sessionToken);

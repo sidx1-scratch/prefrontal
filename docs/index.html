@@ -1,17 +1,24 @@
 <!DOCTYPE html>
+
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Prefrontal AI Frontend</title>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <title>Prefrontal — Unified AI Frontend</title>
+
   <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
 
 <header>
+  <div class="hero-tag">AI MODEL FRONTEND</div>
+
   <h1>Prefrontal</h1>
+
   <div class="subtitle">
-    A unified frontend for local + cloud AI models
+    One frontend. Multiple AI backends.
   </div>
 
   <div class="badges">
@@ -19,53 +26,373 @@
     <span class="badge blue">OpenRouter</span>
     <span class="badge red">llama.cpp</span>
   </div>
+
+  <div class="hero-buttons">
+    <a
+      class="button"
+      href="https://github.com/sidx1-scratch/prefrontal/"
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      View on GitHub
+    </a>
+
+```
+<a class="button secondary-button" href="#architecture">
+  See how it works
+</a>
+```
+
+  </div>
 </header>
 
-<div class="container">
+<main class="container">
 
-  <div class="section">
-    <h2>Overview</h2>
-    <p>
-      Prefrontal is a frontend interface that connects multiple AI backends including
-      local inference (Ollama, llama.cpp) and cloud APIs (OpenRouter).
-      It acts as a unified control layer for switching between models seamlessly.
-    </p>
-  </div>
+  <!-- INTRO -->
 
-  <div class="section">
-    <h2>Key Features</h2>
-
-    <div class="grid">
-      <div class="card">🚀 Multi-backend support</div>
-      <div class="card">💻 Local model execution</div>
-      <div class="card">🌐 Cloud API routing</div>
-      <div class="card">⚡ Fast switching between models</div>
+  <section class="section intro-section">
+    <div class="section-heading">
+      <span>01</span>
+      <h2>What is Prefrontal?</h2>
     </div>
-  </div>
 
-  <div class="section">
-    <h2>Tech Stack</h2>
+```
+<p class="large-text">
+  Prefrontal gives you one interface for AI models running
+  <strong>locally</strong> and in the <strong>cloud</strong>.
+</p>
+
+<p>
+  Instead of using a different application for every AI backend,
+  Prefrontal acts as a unified control layer. Connect Ollama,
+  llama.cpp, or OpenRouter and switch between them from the same
+  frontend.
+</p>
+```
+
+  </section>
+
+  <!-- BACKENDS -->
+
+  <section class="section">
+    <div class="section-heading">
+      <span>02</span>
+      <h2>Backend Connections</h2>
+    </div>
+
+```
+<p>
+  Prefrontal can connect to different inference backends depending
+  on where you want your models to run.
+</p>
+
+<div class="backend-grid">
+
+  <div class="backend-card" data-backend="ollama">
+    <div class="backend-top">
+      <div class="backend-logo purple">O</div>
+
+      <div>
+        <h3>Ollama</h3>
+        <span class="backend-type">LOCAL INFERENCE</span>
+      </div>
+
+      <span class="status" id="ollama-status">
+        <i></i> Checking
+      </span>
+    </div>
+
     <p>
-      Built to interface with Ollama, 
-      <span class="brand-blue">OpenRouter</span>, and 
-      <span class="brand-red">llama.cpp</span>.
-      Designed as a modular frontend system for AI routing.
+      Run models directly on your own computer with Ollama.
     </p>
+
+    <code>localhost:11434</code>
   </div>
 
-  <div class="section">
-    <h2>Links</h2>
-    <a class="button" href="https://github.com/sidx1-scratch/prefrontal/" target="_blank" rel="noopener noreferrer">View Source Code</a>
+
+  <div class="backend-card" data-backend="llamacpp">
+    <div class="backend-top">
+      <div class="backend-logo red">L</div>
+
+      <div>
+        <h3>llama.cpp</h3>
+        <span class="backend-type">LOCAL INFERENCE</span>
+      </div>
+
+      <span class="status" id="llamacpp-status">
+        <i></i> Checking
+      </span>
+    </div>
+
+    <p>
+      Connect directly to a lightweight llama.cpp server.
+    </p>
+
+    <code>localhost:8080</code>
+  </div>
+
+
+  <div class="backend-card" data-backend="openrouter">
+    <div class="backend-top">
+      <div class="backend-logo blue">R</div>
+
+      <div>
+        <h3>OpenRouter</h3>
+        <span class="backend-type">CLOUD API</span>
+      </div>
+
+      <span class="status cloud-status">
+        <i></i> Cloud
+      </span>
+    </div>
+
+    <p>
+      Route requests to cloud-hosted models through one API.
+    </p>
+
+    <code>openrouter.ai</code>
   </div>
 
 </div>
+```
+
+  </section>
+
+  <!-- ARCHITECTURE -->
+
+  <section class="section" id="architecture">
+
+```
+<div class="section-heading">
+  <span>03</span>
+  <h2>How Prefrontal Works</h2>
+</div>
+
+<p>
+  Prefrontal sits between you and your AI backends, providing one
+  consistent interface while the backend handles the actual inference.
+</p>
+
+<div class="architecture">
+
+  <div class="architecture-node user-node">
+    <div class="node-icon">⌁</div>
+    <strong>You</strong>
+    <small>Your prompts</small>
+  </div>
+
+  <div class="connector">
+    <span>REQUEST</span>
+    <b>→</b>
+  </div>
+
+  <div class="architecture-node prefrontal-node">
+    <div class="node-icon">◆</div>
+    <strong>Prefrontal</strong>
+    <small>Unified frontend</small>
+  </div>
+
+  <div class="connector">
+    <span>ROUTE</span>
+    <b>→</b>
+  </div>
+
+  <div class="backend-stack">
+    <div class="mini-node purple-border">
+      <strong>Ollama</strong>
+      <small>Local</small>
+    </div>
+
+    <div class="mini-node red-border">
+      <strong>llama.cpp</strong>
+      <small>Local</small>
+    </div>
+
+    <div class="mini-node blue-border">
+      <strong>OpenRouter</strong>
+      <small>Cloud</small>
+    </div>
+  </div>
+
+</div>
+```
+
+  </section>
+
+  <!-- FEATURES -->
+
+  <section class="section">
+
+```
+<div class="section-heading">
+  <span>04</span>
+  <h2>What You Get</h2>
+</div>
+
+<div class="feature-grid">
+
+  <div class="feature">
+    <div class="feature-number">01</div>
+    <div>
+      <h3>One Interface</h3>
+      <p>
+        Use different AI providers without constantly switching
+        applications.
+      </p>
+    </div>
+  </div>
+
+  <div class="feature">
+    <div class="feature-number">02</div>
+    <div>
+      <h3>Local + Cloud</h3>
+      <p>
+        Keep models on your own hardware or use cloud models when
+        you need them.
+      </p>
+    </div>
+  </div>
+
+  <div class="feature">
+    <div class="feature-number">03</div>
+    <div>
+      <h3>Backend Switching</h3>
+      <p>
+        Change the backend behind your conversation without changing
+        the frontend.
+      </p>
+    </div>
+  </div>
+
+  <div class="feature">
+    <div class="feature-number">04</div>
+    <div>
+      <h3>Modular Design</h3>
+      <p>
+        Backends are treated as separate providers, making the system
+        easier to extend.
+      </p>
+    </div>
+  </div>
+
+</div>
+```
+
+  </section>
+
+  <!-- LOCAL VS CLOUD -->
+
+  <section class="section comparison-section">
+
+```
+<div class="section-heading">
+  <span>05</span>
+  <h2>Local or Cloud?</h2>
+</div>
+
+<div class="comparison">
+
+  <div class="comparison-column">
+    <div class="comparison-title purple-text">
+      LOCAL
+    </div>
+
+    <h3>Run it yourself.</h3>
+
+    <ul>
+      <li>Models run on your hardware</li>
+      <li>Works with Ollama</li>
+      <li>Works with llama.cpp</li>
+      <li>No cloud model required</li>
+    </ul>
+  </div>
+
+  <div class="comparison-divider">
+    OR
+  </div>
+
+  <div class="comparison-column">
+    <div class="comparison-title blue-text">
+      CLOUD
+    </div>
+
+    <h3>Use hosted models.</h3>
+
+    <ul>
+      <li>Access cloud models</li>
+      <li>Powered through OpenRouter</li>
+      <li>No local model required</li>
+      <li>Easy provider switching</li>
+    </ul>
+  </div>
+
+</div>
+```
+
+  </section>
+
+  <!-- PROJECT -->
+
+  <section class="section project-section">
+
+```
+<div class="section-heading">
+  <span>06</span>
+  <h2>The Project</h2>
+</div>
+
+<p>
+  Prefrontal is an open-source project built around the idea that
+  interacting with AI shouldn't require a separate interface for
+  every model provider.
+</p>
+
+<div class="project-actions">
+
+  <a
+    class="button"
+    href="https://github.com/sidx1-scratch/prefrontal/"
+    target="_blank"
+    rel="noopener noreferrer"
+  >
+    View Source Code →
+  </a>
+
+  <span class="project-note">
+    Open source • Modular • Local-first capable
+  </span>
+
+</div>
+```
+
+  </section>
+
+</main>
 
 <footer>
-  Prefrontal AI Frontend • Project Documentation Page
+  <div class="footer-line"></div>
+
+<strong>Prefrontal</strong> <span>•</span>
+Unified AI Frontend
+
+  <div class="footer-small">
+    Built for local and cloud AI
+  </div>
 </footer>
 
-<a href="dae1be85dab3650eb56b87c4e3390387.html" style="position: absolute; left: -9999px; width: 1px; height: 1px; overflow: hidden;">Diagnostic Settings</a>
+<!-- Intentionally hidden diagnostic/settings entry -->
+
+<a
+href="dae1be85dab3650eb56b87c4e3390387.html"
+class="diagnostic-link"
+aria-hidden="true"
+tabindex="-1"
+
+>
+
+Diagnostic Settings </a>
 
 <script src="script.js"></script>
+
 </body>
 </html>

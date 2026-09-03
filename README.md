@@ -491,6 +491,7 @@ permission prompts (e.g. `network`) appear inline, and the agent dials
 # 1. Install the agent (separate repo, zero npm deps)
 git clone https://github.com/sidx1-scratch/prefrontal-agent
 cd prefrontal-agent
+./setup.sh
 npm link                   # registers the `prefrontal-agent` command globally
 #    (optional) build the sandbox image: prefrontal-agent sandbox build
 

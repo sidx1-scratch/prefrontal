@@ -22,12 +22,12 @@
 ![Platform](https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux%20%7C%20Android-blue)
 ![Release](https://img.shields.io/github/v/release/sidx1-scratch/prefrontal?label=latest%20release)
 ![License](https://img.shields.io/badge/license-GPLv3-green)
-![Offline](https://img.shields.io/badge/100%25-Offline-success)
+![Offline](https://img.shields.io/badge/90%25-Offline-success)
 [![Auto Release + GitHub Packages](https://github.com/sidx1-scratch/prefrontal/actions/workflows/npm-publish-github-packages.yml/badge.svg)](https://github.com/sidx1-scratch/prefrontal/actions/workflows/npm-publish-github-packages.yml)
 [![Prefrontal CI (Stable + Cross Platform)](https://github.com/sidx1-scratch/prefrontal/actions/workflows/ci.yml/badge.svg)](https://github.com/sidx1-scratch/prefrontal/actions/workflows/ci.yml)
 
 
-**100% Offline · No Ads · Your Data Stays on Your Device**
+**90% Offline (because of added cloud providers, but mainly local) · No Ads · Your Data Stays on Your Device**
 
 Prefrontal is an open-source, privacy-first chat interface for local AI models. It works with **Ollama** (desktop), **Llama.cpp** (any platform, including Android via Termux), and optionally **OpenRouter** if you'd rather skip local setup entirely. No required cloud dependency, no telemetry, no subscriptions.
 
@@ -473,7 +473,7 @@ Turning the toggle on quietly appends a short instruction to the system prompt, 
 | 🤖 Agent Chat (`/agent`) | drive the paired Prefrontal Agent from the chatbox; progress + permissions stream inline |
 | ✅ Interactive Questions | the agent's `ask_user` tool renders selectable options in chat (mouse or ↑/↓ + Enter) |
 | 🔗 Auto-connect | agent auto-pairs in the background via a localhost shared secret — no pairing token |
-| 🔒 100% Private | Zero network calls except to your own model server |
+| 🔒 90% Private | Zero network calls except to your own model server or to the cloud if you choose the cloud option|
 
 ---
 

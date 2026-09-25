@@ -65,6 +65,8 @@ Prefrontal is an open-source, privacy-first chat interface for local AI models. 
   - An [OpenRouter](https://openrouter.ai) account (free, no install), **or**
   - [Ollama](https://ollama.com) installed locally, **or**
   - A [Llama.cpp](https://github.com/ggml-org/llama.cpp) server you've built or downloaded
+ 
+  - **npm** if you choose to install from npm and run using node.js and npm
 
 ---
 

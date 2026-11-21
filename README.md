@@ -103,7 +103,7 @@ Done — no GPU or model download required.
 Still in Settings, flip the **Web Search** toggle when using any OpenAI-compatible runtime. The model can then pull in live DuckDuckGo results before answering, with any sources it used shown as clickable chips under its reply. See [Web Search](#-web-search-openai-compatible-runtimes) below.
 
 > [!NOTE]
-> the duckduckgo instant answer api only knows more known things so if you for example tell it to search up the prefrontal repo it wont find it because instant answer doesn't know about it. also when it searches up something it looks like this: <img width="800" height="497" alt="ScreencastFrom2026-08-0111-41-15-ezgif com-optimize" src="https://github.com/user-attachments/assets/830edd98-b72f-4517-b38b-539db35ed501" />
+> the duckduckgo instant answer api only knows more known things so if you for example tell it to search up the prefrontal repo it wont find it because instant answer doesn't know about it. Also when it searches up something it looks like this: <img width="800" height="497" alt="ScreencastFrom2026-08-0111-41-15-ezgif com-optimize" src="https://github.com/user-attachments/assets/830edd98-b72f-4517-b38b-539db35ed501" />
 
 
 ---

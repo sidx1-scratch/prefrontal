@@ -15,12 +15,12 @@
     "dev": "node server.js",
     "test:package": "node tests/package-contents.js",
     "test:proxy": "node tests/proxy-smoke.js",
-    "test:agent": "node tests/agent-relay-smoke.js"
+    "test:rag": "node tests/rag-smoke.js"
   },
   "dependencies": {},
   "files": [
     "app.js",
-    "agent.js",
+    "rag.js",
     "server.js",
     "index.html",
     "style.css",
@@ -33,6 +33,8 @@
     "local",
     "offline",
     "private",
+    "rag",
+    "knowledge-base",
     "ollama",
     "openrouter",
     "groq",

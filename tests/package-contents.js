@@ -14,11 +14,11 @@ const npmCommand = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 
 const runtimeFiles = [
   '.env.example',
-  'agent.js',
   'app.js',
   'index.html',
   'manifest.json',
   'package.json',
+  'rag.js',
   'server.js',
   'style.css',
   'vendor/highlight-dark.min.css',

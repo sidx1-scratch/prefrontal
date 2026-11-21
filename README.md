@@ -48,7 +48,7 @@ Prefrontal is an open-source, privacy-first chat interface for local AI models. 
 - [Temperature Control](#️-temperature-control)
 - [Web Search (OpenAI-compatible runtimes)](#-web-search-openai-compatible-runtimes)
 - [Features](#-features)
-- [Prefrontal Agent (coding agent)](#-prefrontal-agent-coding-agent)
+- [Local Knowledge Base (RAG)](#-local-knowledge-base-rag)
 - [Keyboard Shortcuts](#️-keyboard-shortcuts)
 - [Privacy & Data](#-privacy--data)
 - [Troubleshooting](#-troubleshooting)
@@ -234,9 +234,7 @@ npm start
 If you want to contribute or just want the full Git history.
 
 `npm link` registers a global `prefrontal` command (the server is the bin)
-so you can start it from anywhere with `prefrontal` — useful if you run the
-[Prefrontal Agent](#-prefrontal-agent-coding-agent) in the background, which
-auto-pairs with a server launched this way.
+so you can start it from anywhere with `prefrontal`.
 >[!TIP]
 >To update later, run git pull from inside the prefrontal folder. If the dependencies changed, run npm install afterward just in case.
 
@@ -472,55 +470,28 @@ Turning the toggle on quietly appends a short instruction to the system prompt, 
 | 🎨 Refined UI | 4 themes: Dark, Midnight, Emerald, Light |
 | 🧑 Local Profile | Device identity stored locally — no accounts |
 | 📤 Export | Export chats as Markdown, profile as JSON |
-| 🤖 Agent Chat (`/agent`) | drive the paired Prefrontal Agent from the chatbox; progress + permissions stream inline |
-| ✅ Interactive Questions | the agent's `ask_user` tool renders selectable options in chat (mouse or ↑/↓ + Enter) |
-| 🔗 Auto-connect | agent auto-pairs in the background via a localhost shared secret — no pairing token |
+| 📚 Local Knowledge Base (RAG) | 100% private, on-device document retrieval (BM25) with zero dependencies |
+| 📄 Multi-Format Ingestion | Drag & drop files (.txt, .md, code, json, csv) or paste notes |
+| 🔍 Instant Relevance Search | Real-time test search, automatic context injection, and source citations |
 | 🔒 90% Private | Zero network calls except to your own model server or to the cloud if you choose the cloud option|
 
 ---
 
-## 🤖 Prefrontal Agent (coding agent)
+## 📚 Local Knowledge Base (RAG)
 
-Prefrontal also ships a **coding-agent panel**: pair with the
-[Prefrontal Agent](https://github.com/sidx1-scratch/prefrontal-agent) —
-a separate, zero-dependency local agent that runs commands inside an
-**isolated Podman sandbox** and keeps filesystem access scoped to an
-approved workspace — and drive it from this UI. Output streams live,
-permission prompts (e.g. `network`) appear inline, and the agent dials
-**out** to this server, so no ports need forwarding.
+Prefrontal includes a built-in, **dependency-free Local Knowledge Base (RAG)** engine (`rag.js`):
+- **100% Private & On-Device**: Uses browser IndexedDB (with automatic localStorage fallback). Your documents and chunks never leave your machine.
+- **Zero NPM Dependencies**: Pure modern JavaScript and standard algorithms — no heavy vector database binaries, LangChain, or external services required.
+- **BM25 Retrieval Engine**: Fast and accurate Best Matching 25 probabilistic relevance ranking with smart boundary text chunking and overlap windows.
+- **Automatic Context Augmentation**: Relevant document chunks matching your chat message are dynamically injected into the model's context.
+- **Source Citations**: Displays clickable source pills with document names and chunk ranks in the chat responses.
+- **Backup & Sync**: One-click JSON export and import to backup or move your knowledge base across devices.
 
-```bash
-# 1. Install the agent (separate repo, zero npm deps)
-git clone https://github.com/sidx1-scratch/prefrontal-agent
-cd prefrontal-agent
-./setup.sh
-npm link                   # registers the `prefrontal-agent` command globally
-#    (optional) build the sandbox image: prefrontal-agent sandbox build
-
-# 2. Run it — it auto-connects to this server in the background
-prefrontal-agent           
-#    Auto-pair happens automatically because this server writes a local
-#    shared secret to ~/.prefrontal-agent/shared-secret when it starts.
-#    Original manual flow still works:
-#      Open the Agent panel → Pair new agent → copy the token,
-#      then:  prefrontal> pair <token>
-
-# 3. Drive it from the panel, e.g.
-#    run npm test | write src/app.js⏎content | list src
-#    ...or from the chatbox:  /agent create a blog project and publish it
-```
-
-The integration adds **no dependencies** to this project — the relay in
-`server.js` uses only Node built-ins and `agent.js` is plain vanilla JS.
-
-On the same machine the agent **auto-pairs in the background**: this server
-writes a random shared secret into `~/.prefrontal-agent/shared-secret` at
-startup (mode 0600), the agent reads it and dials the backend automatically.
-Auto-pair is localhost-only and can be disabled with
-`PREFRONTAL_NO_AUTO_PAIR=1`.
-
-See [docs/agent-integration.md](docs/agent-integration.md) for the full
-guide, security model, and relay protocol.
+### Adding Documents to Your Knowledge Base
+1. Click the **Knowledge Base** icon (📚) in the top bar.
+2. Drag & drop files (`.txt`, `.md`, `.json`, `.csv`, `.py`, `.js`, etc.) or paste notes directly in the "Add Text / Notes" tab.
+3. Test your queries in real-time in the "Test Search" tab to preview chunk scores.
+4. Toggle RAG on or off anytime with the switch in the Knowledge Base modal or the quick button in the chat input bar.
 
 ---
 
